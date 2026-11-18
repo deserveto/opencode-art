@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { Plugin } from "@opencode/plugin/tui"
-import { extend, useTerminalDimensions } from "@opentui/solid"
-import { createEffect, createMemo, createSignal } from "solid-js"
+import { extend } from "@opentui/solid"
+import { createEffect, createMemo, createSignal, Show } from "solid-js"
 import { runArtCommand } from "./src/commands/run.tsx"
 import { ArtRenderable } from "./src/render/index.ts"
 import { themeColors } from "./src/plugin/host.ts"
@@ -16,16 +16,10 @@ function message(error: unknown): string {
 }
 
 function ArtLayer(props: { readonly context: Context; readonly state: ArtState }) {
-  const dimensions = useTerminalDimensions()
-  const [home, setHome] = createSignal(props.context.ui.router.current().type === "home")
   const [themeTick, setThemeTick] = createSignal(0)
   const theme = createMemo(() => {
     themeTick()
     return themeColors(props.context.theme)
-  })
-
-  createEffect(() => {
-    setHome(props.context.ui.router.current().type === "home")
   })
 
   // Re-resolve colors when the host swaps the active theme. The reads are
@@ -38,20 +32,12 @@ function ArtLayer(props: { readonly context: Context; readonly state: ArtState }
   })
 
   return (
-    <box
-      position="absolute"
-      left={0}
-      top={0}
-      width={dimensions().width}
-      height={dimensions().height}
-      zIndex={-1}
-    >
+    <box position="absolute" left={0} top={0} width="100%" height="100%" zIndex={-1}>
       <art-background
         pack={props.state.pack()}
         resolvedStyle={props.state.style() ?? undefined}
         fps={props.state.fps()}
         enabled={props.state.enabled()}
-        paused={!home()}
         animations={props.state.animations}
         theme={theme()}
         onError={(text) => props.context.ui.toast.show({ message: text, variant: "error" })}
@@ -78,27 +64,37 @@ export default Plugin.define({
     }
 
     try {
-      context.keymap.layer(() => ({
-        mode: "global",
-        commands: [
-          {
-            id: "opencode-art.art",
-            title: "ASCII art",
-            description: "Browse, select, and configure the animated ASCII background",
-            group: "Art",
-            slash: { name: "art", arguments: true },
-            run: (input) => runArtCommand(context, state, input),
-          },
-        ],
-      }))
-
-      const removeSlot = context.ui.slot({
+      // One always-mounted claim carries the command and the home-only art.
+      // A keymap layer made in async setup can be disposed with the setup
+      // owner, and unmounting the art layer on other routes is the reliable
+      // way to keep it off sessions.
+      const remove = context.ui.slot({
         append: "app",
-        render: () => <ArtLayer context={context} state={state} />,
+        render: () => {
+          context.keymap.layer(() => ({
+            mode: "global",
+            commands: [
+              {
+                id: "opencode-art.art",
+                title: "ASCII art",
+                description: "Browse, select, and configure the animated ASCII background",
+                group: "Art",
+                palette: true,
+                slash: { name: "art", arguments: true },
+                run: (input) => runArtCommand(context, state, input),
+              },
+            ],
+          }))
+          return (
+            <Show when={context.ui.router.current().type === "home"}>
+              <ArtLayer context={context} state={state} />
+            </Show>
+          )
+        },
       })
 
       return () => {
-        removeSlot()
+        remove()
         state.dispose()
       }
     } catch (error) {
