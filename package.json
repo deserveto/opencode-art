@@ -1,0 +1,68 @@
+{
+  "name": "opencode-art",
+  "version": "0.1.0",
+  "description": "Animated ASCII art background for the OpenCode home screen.",
+  "type": "module",
+  "license": "MIT",
+  "author": "sangh",
+  "exports": {
+    ".": "./index.ts",
+    "./tui": "./tui.tsx",
+    "./scene": "./src/scene/index.ts",
+    "./schema": "./schemas/art.schema.json"
+  },
+  "bin": {
+    "opencode-art": "./bin/opencode-art.cjs"
+  },
+  "files": [
+    "index.ts",
+    "tui.tsx",
+    "src/",
+    "frames/",
+    "schemas/",
+    "skills/",
+    "bin/",
+    "docs/",
+    "README.md",
+    "LICENSE",
+    "LICENSE-ART"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "test:node": "node --test \"test/**/*.test.ts\"",
+    "cli": "node bin/opencode-art.cjs"
+  },
+  "peerDependencies": {
+    "@opencode/plugin": "*",
+    "@opentui/core": "*",
+    "@opentui/solid": "*",
+    "solid-js": "*"
+  },
+  "peerDependenciesMeta": {
+    "@opencode/plugin": {
+      "optional": true
+    },
+    "@opentui/core": {
+      "optional": true
+    },
+    "@opentui/solid": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@opencode/plugin": "2.3.2",
+    "@opencode/theme": "^2.3.2",
+    "@opentui/core": "0.8.4",
+    "@opentui/solid": "0.8.4",
+    "@types/node": "^24.0.0",
+    "solid-js": "^1.9.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencode.art/schemas/art.schema.json",
+  "title": "opencode-art pack manifest",
+  "description": "Manifest for an opencode-art pack. A pack is a directory named after its id.",
+  "type": "object",
+  "required": ["schemaVersion", "id", "name", "fps", "cols", "rows"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "Pack schema version. A higher version is rejected by older plugins."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$",
+      "description": "Lowercase pack id. Must equal the folder name."
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "description": { "type": "string", "maxLength": 500 },
+    "author": { "type": "string", "maxLength": 80 },
+    "license": { "type": "string", "maxLength": 40 },
+    "homepage": { "type": "string", "pattern": "^https://", "maxLength": 200 },
+    "fps": { "type": "number", "minimum": 1, "maximum": 30 },
+    "cols": { "type": "integer", "minimum": 1, "maximum": 400 },
+    "rows": { "type": "integer", "minimum": 1, "maximum": 200 },
+    "defaultStyle": {
+      "enum": ["mono", "theme", "palette", "original"],
+      "default": "mono"
+    },
+    "ramp": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 64,
+      "description": "Width-1 glyphs ordered low to high density."
+    },
+    "palette": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 32,
+      "items": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+      "description": "#rrggbb stops ordered low to high brightness."
+    },
+    "frames": {
+      "type": "string",
+      "description": "Pack-relative directory of .txt frames."
+    },
+    "canvas": {
+      "type": "string",
+      "description": "Pack-relative .txt canvas."
+    },
+    "effects": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/shimmer" },
+          { "$ref": "#/$defs/wave" },
+          { "$ref": "#/$defs/drift" },
+          { "$ref": "#/$defs/twinkle" },
+          { "$ref": "#/$defs/scanline" }
+        ]
+      }
+    },
+    "source": {
+      "type": "object",
+      "description": "Provenance metadata. Never executed.",
+      "properties": {
+        "type": { "type": "string" },
+        "file": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "oneOf": [{ "required": ["frames"] }, { "required": ["canvas"] }],
+  "not": { "required": ["frames", "canvas"] },
+  "allOf": [
+    {
+      "if": { "required": ["frames"] },
+      "then": { "not": { "required": ["effects"] } }
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "intensity": { "type": "number", "minimum": 0, "maximum": 1 },
+    "speed": { "type": "number", "minimum": 0, "maximum": 4 },
+    "seed": { "type": "integer" },
+    "axis": { "enum": ["x", "y"] },
+    "shimmer": {
+      "type": "object",
+      "required": ["type", "intensity"],
+      "properties": {
+        "type": { "const": "shimmer" },
+        "intensity": { "$ref": "#/$defs/intensity" },
+        "speed": { "$ref": "#/$defs/speed" },
+        "seed": { "$ref": "#/$defs/seed" }
+      }
+    },
+    "wave": {
+      "type": "object",
+      "required": ["type", "intensity"],
+      "properties": {
+        "type": { "const": "wave" },
+        "intensity": { "$ref": "#/$defs/intensity" },
+        "speed": { "$ref": "#/$defs/speed" },
+        "axis": { "$ref": "#/$defs/axis" }
+      }
+    },
+    "drift": {
+      "type": "object",
+      "required": ["type", "intensity"],
+      "properties": {
+        "type": { "const": "drift" },
+        "intensity": { "$ref": "#/$defs/intensity" },
+        "speed": { "$ref": "#/$defs/speed" },
+        "axis": { "$ref": "#/$defs/axis" }
+      }
+    },
+    "twinkle": {
+      "type": "object",
+      "required": ["type", "intensity"],
+      "properties": {
+        "type": { "const": "twinkle" },
+        "intensity": { "$ref": "#/$defs/intensity" },
+        "speed": { "$ref": "#/$defs/speed" },
+        "seed": { "$ref": "#/$defs/seed" }
+      }
+    },
+    "scanline": {
+      "type": "object",
+      "required": ["type", "intensity"],
+      "properties": {
+        "type": { "const": "scanline" },
+        "intensity": { "$ref": "#/$defs/intensity" },
+        "speed": { "$ref": "#/$defs/speed" },
+        "axis": { "$ref": "#/$defs/axis" }
+      }
+    }
+  }
+}
