@@ -17,20 +17,13 @@ CLI is author-time only; see [docs/AUTHORING.md](docs/AUTHORING.md).
 
 ## Install
 
-Use OpenCode's plugin command, which accepts an npm or Git package specifier:
+The npm package is not published yet. Install from Git:
 
 ```sh
-opencode plugin add opencode-art
+opencode plugin add https://github.com/deserveto/opencode-art
 ```
 
-From Git instead:
-
-```sh
-opencode plugin add <repository-url>
-```
-
-If the npm package is not published yet, use the Git form or the local
-development flow below.
+Once it is on npm, `opencode plugin add opencode-art` works the same way.
 
 The package exports `./tui` for the TUI part and `.` for the server part, which
 registers the authoring skill. OpenCode resolves both from the installed

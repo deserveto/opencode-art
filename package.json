@@ -5,6 +5,9 @@
   "type": "module",
   "license": "MIT",
   "author": "sangh",
+  "repository": "github:deserveto/opencode-art",
+  "homepage": "https://github.com/deserveto/opencode-art#readme",
+  "bugs": "https://github.com/deserveto/opencode-art/issues",
   "exports": {
     ".": "./index.ts",
     "./tui": "./tui.tsx",
