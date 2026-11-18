@@ -38,7 +38,7 @@ async function main() {
     top: 0,
     zIndex: -1,
     pack,
-    style,
+    resolvedStyle: style,
     fps: pack.manifest.fps,
     enabled: true,
     paused: false,
@@ -62,6 +62,11 @@ async function main() {
       return
     }
     for (const line of setup.captureCharFrame().split("\n").slice(0, height)) console.log(line)
+    const foregrounds = new Set(
+      setup
+        .captureSpans()
+        .lines.flatMap((line) => line.spans.map((span) => span.fg.toString())),
+    )
     console.log(
       JSON.stringify({
         pack: pack.id,
@@ -69,6 +74,7 @@ async function main() {
         requested,
         effective: style.effective,
         cellsUpdated: setup.getNativeStats().cellsUpdated,
+        foregrounds: foregrounds.size,
       }),
     )
   } finally {

@@ -43,7 +43,7 @@ function ArtLayer(props: { readonly context: Context; readonly state: ArtState }
     >
       <art-background
         pack={props.state.pack()}
-        style={props.state.style() ?? undefined}
+        resolvedStyle={props.state.style() ?? undefined}
         fps={props.state.fps()}
         enabled={props.state.enabled()}
         paused={!home()}

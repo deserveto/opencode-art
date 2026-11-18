@@ -61,12 +61,20 @@ export function ArtDialog(props: DialogProps) {
     return pack ? props.state.resolve(pack) : null
   })
 
+  const previewSize = createMemo(() => {
+    const pack = previewPack()
+    const width = Math.max(24, Math.min(64, Math.floor(dimensions().width * 0.55) - 34))
+    const height = pack
+      ? Math.max(6, Math.min(22, Math.round((pack.manifest.rows * width) / pack.manifest.cols)))
+      : 12
+    return { width, height }
+  })
+
   const preview = createMemo(() => {
     const pack = previewPack()
     if (!pack) return []
-    const cols = Math.max(16, Math.min(76, dimensions().width - 50))
-    const rows = Math.max(4, Math.min(18, dimensions().height - 16))
-    return buildPreview(pack, resolved() ?? props.state.resolve(pack), cols, rows)
+    const size = previewSize()
+    return buildPreview(pack, resolved() ?? props.state.resolve(pack), size.width, size.height)
   })
 
   function rgba(color: readonly [number, number, number, number]): RGBA {
@@ -172,12 +180,13 @@ export function ArtDialog(props: DialogProps) {
   const faint = props.theme.text.faint
   const muted = props.theme.text.muted
   const base = props.theme.text.base
-  const accent = props.theme.text.base
 
   function sameLine(): string {
     const pack = previewPack()
     if (!pack) return ""
-    return `${pack.manifest.name}${pack.manifest.description ? ` · ${pack.manifest.description}` : ""}`
+    const width = previewSize().width
+    const text = `${pack.manifest.name}${pack.manifest.description ? ` · ${pack.manifest.description}` : ""}`
+    return text.length > width ? `${text.slice(0, Math.max(0, width - 1))}~` : text
   }
 
   const status = createMemo(() => {
@@ -215,23 +224,21 @@ export function ArtDialog(props: DialogProps) {
       gap={1}
     >
       <box flexDirection="row" flexGrow={1} gap={2}>
-        <box width={36} flexDirection="column">
-          <text fg={muted}>Packs ({list().length})</text>
+        <box width={34} flexDirection="column">
+          <text fg={muted} wrapMode="none" truncate>
+            Packs ({list().length}){active() ? ` · active: ${active()}` : ""}
+          </text>
           <Show when={list().length > 0} fallback={<text fg={faint}>No packs found.</text>}>
             <For each={list()}>
               {(candidate, index) => (
-                <text fg={index() === selectedIndex() ? base : muted}>
+                <text fg={index() === selectedIndex() ? base : muted} wrapMode="none" truncate>
                   {index() === selectedIndex() ? "> " : "  "}
                   {candidate.id}
+                  {candidate.id === active() ? "*" : " "}
                   <span style={{ fg: faint }}>
-                    {"  "}
+                    {" "}
                     {candidate.scope}
                   </span>
-                  {candidate.id === active() ? (
-                    <span style={{ fg: accent }}>{"  active"}</span>
-                  ) : (
-                    <span>{"        "}</span>
-                  )}
                   {"  "}
                   {shortName(candidate.manifest.name)}
                   <span style={{ fg: faint }}>{"  "}{badges(candidate)}</span>
@@ -241,13 +248,15 @@ export function ArtDialog(props: DialogProps) {
           </Show>
         </box>
         <box
-          flexGrow={1}
+          width={previewSize().width + 2}
+          height={previewSize().height + 4}
           flexDirection="column"
           border
           borderStyle="single"
           borderColor={border}
           title=" Preview "
           paddingX={1}
+          overflow="hidden"
         >
           <Show
             when={preview().length > 0}
@@ -258,11 +267,15 @@ export function ArtDialog(props: DialogProps) {
               </box>
             }
           >
-            <text fg={faint}>{sameLine()}</text>
-            <text fg={faint}>Styles: {availableStyles().join(" · ")}</text>
+            <text fg={faint} wrapMode="none" truncate>
+              {sameLine()}
+            </text>
+            <text fg={faint} wrapMode="none" truncate>
+              Styles: {availableStyles().join(" · ")}
+            </text>
             <For each={preview()}>
               {(line) => (
-                <text>
+                <text wrapMode="none">
                   <For each={line}>{(run) => <span style={{ fg: run.color ? rgba(run.color) : faint }}>{run.text}</span>}</For>
                 </text>
               )}
@@ -287,7 +300,7 @@ export function ArtDialog(props: DialogProps) {
       </Show>
       <text fg={faint}>
         Up/Down select · Enter apply · s style ({availableStyles().join("/")}) · Left/Right fps · e enabled · r reload ·
-        Esc close · {capability()}
+        Esc close · * active · {capability()}
       </text>
       <text fg={faint}>Create art by asking the agent in chat · {props.state.roots.globalArts}</text>
     </box>

@@ -12,7 +12,7 @@ export function openArtDialog(context: Context, state: ArtState): void {
     context.ui.dialog.show(() => (
       <ArtDialog state={state} theme={context.theme} close={() => context.ui.dialog.clear()} />
     ))
-    context.ui.dialog.set({ size: "large", centered: true })
+    context.ui.dialog.set({ size: "xlarge", centered: true })
   } catch (error) {
     context.ui.toast.show({
       message: `Could not open the art dialog: ${error instanceof Error ? error.message : String(error)}`,

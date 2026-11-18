@@ -11,7 +11,8 @@ import type { Capabilities, RGBA4, ResolvedStyle, ThemeColors } from "./types.ts
 
 export interface ArtRenderableOptions extends RenderableOptions<ArtRenderable> {
   readonly pack?: Pack | null
-  readonly style?: ResolvedStyle
+  /** `resolvedStyle`, not `style`: the reconciler treats a `style` prop as a style bag. */
+  readonly resolvedStyle?: ResolvedStyle
   readonly fps?: number
   readonly enabled?: boolean
   readonly paused?: boolean
@@ -104,7 +105,7 @@ export class ArtRenderable extends Renderable {
     this._paused = options.paused === true
     this._animations = options.animations !== false
     this._pack = options.pack ?? null
-    this._style = options.style ?? FALLBACK_STYLE
+    this._style = options.resolvedStyle ?? FALLBACK_STYLE
     this.rebuildPlayer()
     this.updateAnimation()
     this.safeRequestRender()
@@ -128,11 +129,11 @@ export class ArtRenderable extends Renderable {
     this.updateAnimation()
   }
 
-  get style(): ResolvedStyle {
+  get resolvedStyle(): ResolvedStyle {
     return this._style
   }
 
-  set style(value: ResolvedStyle | undefined) {
+  set resolvedStyle(value: ResolvedStyle | undefined) {
     const next = value ?? FALLBACK_STYLE
     if (next === this._style) return
     this._style = next
