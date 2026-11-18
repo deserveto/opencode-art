@@ -6,7 +6,7 @@ export interface ParsedArgs {
   readonly flags: ReadonlyMap<string, FlagValue>
 }
 
-const BOOLEAN_FLAGS = new Set(["force", "dither", "invert", "help"])
+const BOOLEAN_FLAGS = new Set(["force", "dither", "invert", "help", "mono"])
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
   const positionals: string[] = []

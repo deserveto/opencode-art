@@ -94,10 +94,11 @@ module produces frames.
 | `--palette` | 2-32 comma-separated hex stops for color output. | none |
 | `--colors` | Quantize to this many colors, 2-256. | `64` |
 | `--dither` | Floyd-Steinberg dithering. Implies a mono pack and conflicts with `--palette`. | off |
+| `--mono` | Force a mono pack with no color sidecars. | off |
 | `--invert` | Invert luminance. | off |
 | `--aspect` | Sample aspect ratio. Terminal cells are about twice as tall as wide. | `0.5` |
 | `--timeout` | Scene timeout in seconds. | `60` |
-| `--force` | Overwrite a non-empty directory that is not already a matching pack. | off |
+| `--force` | Bypass the output-directory safety check. | off |
 
 Behavior:
 
@@ -272,7 +273,7 @@ Ask in chat, for example:
 > Make me a rainy city background for the OpenCode home screen, mono, about
 > 100 columns wide.
 
-The agent can create the pack directly. With the CLI available, it can also
+The agent can create the pack directly. With the CLI, it can also
 `init`, write `scene.mjs`, `bake`, `validate`, and `preview` in a loop until the
 art is good.
 

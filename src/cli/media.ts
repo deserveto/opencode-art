@@ -18,6 +18,15 @@ export interface AnimatedFrames {
   readonly delays: readonly number[]
 }
 
+const MAX_PIXELS = 64_000_000
+
+function checkDimensions(width: number, height: number, label: string): void {
+  if (!(width > 0) || !(height > 0)) throw new Error(`${label} has no pixels`)
+  if (width * height > MAX_PIXELS) {
+    throw new Error(`${label} is ${width}x${height}; the media cap is 64 megapixels. Downscale it before baking.`)
+  }
+}
+
 function fromPixels(data: ArrayLike<number>, width: number, height: number, channels: number, depth: number): RgbaImage {
   const out = new Uint8ClampedArray(width * height * 4)
   const scale = depth === 16 ? 1 / 257 : 1
@@ -51,6 +60,26 @@ function fromPixels(data: ArrayLike<number>, width: number, height: number, chan
   return { width, height, data: out }
 }
 
+function fromPalette(
+  data: ArrayLike<number>,
+  palette: readonly (readonly number[])[],
+  transparency: ArrayLike<number> | undefined,
+  width: number,
+  height: number,
+): RgbaImage {
+  const out = new Uint8ClampedArray(width * height * 4)
+  for (let pixel = 0; pixel < width * height; pixel++) {
+    const index = data[pixel] ?? 0
+    const color = palette[index] ?? [0, 0, 0]
+    const target = pixel * 4
+    out[target] = color[0] ?? 0
+    out[target + 1] = color[1] ?? 0
+    out[target + 2] = color[2] ?? 0
+    out[target + 3] = transparency?.[index] ?? 255
+  }
+  return { width, height, data: out }
+}
+
 export function extensionOf(file: string): string {
   const dot = file.lastIndexOf(".")
   return dot < 0 ? "" : file.slice(dot + 1).toLowerCase()
@@ -61,14 +90,20 @@ export async function decodeStill(file: string): Promise<RgbaImage> {
   const extension = extensionOf(file)
   if (extension === "png") {
     const decoded = decodePng(buffer)
+    checkDimensions(decoded.width, decoded.height, file)
+    if (decoded.palette) {
+      return fromPalette(decoded.data, decoded.palette, decoded.transparency, decoded.width, decoded.height)
+    }
     return fromPixels(decoded.data, decoded.width, decoded.height, decoded.channels ?? 4, decoded.depth ?? 8)
   }
   if (extension === "jpg" || extension === "jpeg") {
     const decoded = decodeJpeg(buffer, { useTArray: true, formatAsRGBA: true })
+    checkDimensions(decoded.width, decoded.height, file)
     return { width: decoded.width, height: decoded.height, data: new Uint8ClampedArray(decoded.data) }
   }
   if (extension === "webp") {
     const decoded = decodeWebp(new Uint8Array(buffer))
+    checkDimensions(decoded.width, decoded.height, file)
     return { width: decoded.width, height: decoded.height, data: new Uint8ClampedArray(decoded.data) }
   }
   if (extension === "gif") {
@@ -82,11 +117,12 @@ export async function decodeStill(file: string): Promise<RgbaImage> {
 
 export async function decodeAnimation(file: string): Promise<AnimatedFrames> {
   const buffer = await readFile(file)
-  const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+  const arrayBuffer = new Uint8Array(buffer).buffer
   const gif = parseGIF(arrayBuffer)
-  const parsed = decompressFrames(gif, true)
   const width = gif.lsd.width
   const height = gif.lsd.height
+  checkDimensions(width, height, file)
+  const parsed = decompressFrames(gif, true)
   const canvas = new Uint8ClampedArray(width * height * 4)
   const frames: RgbaImage[] = []
   const delays: number[] = []

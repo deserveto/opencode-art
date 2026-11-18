@@ -198,7 +198,7 @@ stale canvas fail the bake instead of shifting the grid.
 
 ## Bake and validate
 
-Once the CLI ships:
+Bake and validate a scene:
 
 ```sh
 opencode-art bake scene.mjs --out ~/.config/opencode/arts/my-scene --cols 40 --rows 12 --fps 10

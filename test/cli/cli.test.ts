@@ -277,8 +277,14 @@ test("bake rejects bad options", async () => {
     await writeFile(input, encodePng({ width: 4, height: 2, data: rgba(4, 2) }))
     assert.equal(run(["bake", input, "--out", path.join(dir, "o1"), "--cols", "0"]).code, 1)
     assert.equal(run(["bake", input, "--out", path.join(dir, "o2"), "--dither", "--palette", "#000,#fff"]).code, 1)
+    assert.equal(run(["bake", input, "--out", path.join(dir, "o2b"), "--mono", "--palette", "#000,#fff"]).code, 1)
     assert.equal(run(["bake", input, "--out", path.join(dir, "o3"), "--nope"]).code, 1)
     assert.match(run(["bake", input, "--out", path.join(dir, "o4"), "--palette", "red"]).stderr, /#rrggbb/)
+    const mono = run(["bake", input, "--out", path.join(dir, "o5"), "--mono"])
+    assert.equal(mono.code, 0, mono.stderr)
+    assert.equal(run(["validate", path.join(dir, "o5")]).code, 0)
+    const manifest = JSON.parse(await readFile(path.join(dir, "o5", "art.json"), "utf8")) as { defaultStyle: string }
+    assert.equal(manifest.defaultStyle, "mono")
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

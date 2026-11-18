@@ -121,6 +121,9 @@ Run these against a live OpenCode session before a release.
 - A bad scene and a hanging scene both exiting 1.
 - Bad options and a missing `ffmpeg`.
 
+`test/cli/scene.test.ts` covers the scene helpers: `clamp`, `lerp`, `noise`,
+`loadCanvas` dimensions, determinism, color travel, and input immutability.
+
 A real video decode with `ffmpeg` installed is not covered; only the
 missing-binary path is. GIF fixtures live in `test/fixtures/media`. Other media
 is generated in a temporary directory during the test.

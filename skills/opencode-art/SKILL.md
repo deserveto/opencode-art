@@ -101,7 +101,7 @@ The bundled Fool is 180 x 50, 10 fps, 60 frames (6 second loop), ramp ` .:;-~=+*
 
 ```sh
 node bin/opencode-art.cjs init <dir> [--force]
-node bin/opencode-art.cjs bake <input> --out <dir> [--cols 180] [--rows 50] [--fps 10] [--loop 6] [--charset " .:-=+*#%@"] [--ramp ...] [--palette "#111,#eee"] [--colors 64] [--dither] [--invert] [--aspect 0.5] [--force]
+node bin/opencode-art.cjs bake <input> --out <dir> [--cols 180] [--rows 50] [--fps 10] [--loop 6] [--charset " .:-=+*#%@"] [--ramp ...] [--palette "#111,#eee"] [--colors 64] [--dither] [--mono] [--invert] [--aspect 0.5] [--force]
 node bin/opencode-art.cjs validate <dir>
 node bin/opencode-art.cjs preview <dir> [--frame N] [--width N]
 node bin/opencode-art.cjs help

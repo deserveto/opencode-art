@@ -56,6 +56,7 @@ Bake options:
   --palette <list>  comma-separated #rrggbb stops for color output
   --colors <n>      quantize colors to N entries, 2-256 (default ${DEFAULT_COLORS})
   --dither          Floyd-Steinberg dithering; implies a mono pack
+  --mono            force a mono pack (no color sidecars)
   --invert          invert luminance
   --aspect <n>      source aspect correction (default ${DEFAULT_ASPECT})
   --timeout <s>     scene timeout, seconds (default ${DEFAULT_TIMEOUT_S})
@@ -353,9 +354,10 @@ function collectSamples(frames: readonly GlyphFrame[]): Uint8Array {
       if (frame.chars[index] !== " ") cells++
     }
   }
-  const samples = new Uint8Array(Math.max(3, cells * 3))
-  let offset = 0
   const stride = Math.max(1, Math.floor(cells / 400_000))
+  const sampleCount = Math.ceil(cells / stride)
+  const samples = new Uint8Array(Math.max(3, sampleCount * 3))
+  let offset = 0
   let seen = 0
   for (const frame of frames) {
     if (!frame.colors) continue
@@ -392,7 +394,7 @@ async function attempt<T>(label: string, action: () => Promise<T>): Promise<T> {
 }
 
 async function commandBake(positionals: readonly string[], flags: ReadonlyMap<string, FlagValue>): Promise<number> {
-  checkFlags(flags, ["out", "cols", "rows", "fps", "loop", "charset", "ramp", "palette", "colors", "dither", "invert", "aspect", "force", "timeout"])
+  checkFlags(flags, ["out", "cols", "rows", "fps", "loop", "charset", "ramp", "palette", "colors", "dither", "mono", "invert", "aspect", "force", "timeout"])
   const input = path.resolve(expandHome(requirePositional(positionals, 0, "opencode-art bake <input> --out <dir>")))
   const outFlag = flagString(flags, "out")
   if (!outFlag) throw new CliError("missing --out <dir>")
@@ -406,7 +408,8 @@ async function commandBake(positionals: readonly string[], flags: ReadonlyMap<st
   const ramp = parseRamp(flags)
   const declaredPalette = parsePalette(flags)
   const dither = flagBool(flags, "dither")
-  if (dither && declaredPalette) throw new CliError("--dither produces a mono pack; remove --palette")
+  const mono = flagBool(flags, "mono") || dither
+  if (mono && declaredPalette) throw new CliError("--mono and --dither produce a mono pack; remove --palette")
   const timeoutSeconds = parseNumber(flags, "timeout", DEFAULT_TIMEOUT_S, 1, 3600)
   const envTimeout = Number(process.env.OPENCODE_ART_SCENE_TIMEOUT_MS)
   const timeoutMs = Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : timeoutSeconds * 1000
@@ -414,7 +417,7 @@ async function commandBake(positionals: readonly string[], flags: ReadonlyMap<st
   await prepareOutput(out, flagBool(flags, "force"))
 
   const kind = sourceKind(input)
-  const gridOptions: GridOptions = { cols, rows, ramp, aspect, invert: flagBool(flags, "invert"), dither, color: !dither }
+  const gridOptions: GridOptions = { cols, rows, ramp, aspect, invert: flagBool(flags, "invert"), dither, color: !mono }
   let frames: GlyphFrame[]
   let name = titleCase(path.basename(out))
   let outputKind: "canvas" | "frames" = "canvas"
@@ -428,7 +431,7 @@ async function commandBake(positionals: readonly string[], flags: ReadonlyMap<st
     if (baked.meta.name) name = baked.meta.name
     outputKind = "frames"
     palette = baked.palette ?? declaredPalette
-    if (dither) {
+    if (dither || mono) {
       frames = frames.map((frame) => ({ ...frame, colors: null }))
       palette = undefined
     }

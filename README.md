@@ -118,11 +118,11 @@ Packs live in three scopes, highest priority first:
 The folder name is the pack id. A duplicate id in one scope is resolved
 lexicographically; the other copy is reported.
 
-The authoring CLI `opencode-art init`, `bake`, `validate`, and `preview` ships
-with the authoring milestone and is included in this repository. It is an
-author-time tool only. The plugin never imports it, never imports `scene.mjs`,
-and never runs scene code. See [docs/AUTHORING.md](docs/AUTHORING.md) and
-[docs/SCENE_API.md](docs/SCENE_API.md).
+The authoring CLI (`opencode-art init`, `bake`, `validate`, and `preview`)
+ships with the authoring milestone and is included in this repository. It is
+an author-time tool only. The plugin never imports it, never imports
+`scene.mjs`, and never runs scene code. See
+[docs/AUTHORING.md](docs/AUTHORING.md) and [docs/SCENE_API.md](docs/SCENE_API.md).
 
 ## Settings
 
