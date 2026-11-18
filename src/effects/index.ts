@@ -179,7 +179,7 @@ function twinkle(grid: MutableGrid, p: Params, time: number, fps: number, metaSe
   }
 }
 
-function scanline(grid: MutableGrid, p: Params, time: number): void {
+function scanline(grid: MutableGrid, p: Params, time: number, ramp: string): void {
   if (p.intensity <= 0) return
   const span = p.axis === "x" ? grid.cols : grid.rows
   if (span <= 0) return
@@ -202,10 +202,15 @@ function scanline(grid: MutableGrid, p: Params, time: number): void {
         grid.colors[index * 3 + 1] = clamp(Math.round((grid.colors[index * 3 + 1] ?? 0) * scale), 0, 255)
         grid.colors[index * 3 + 2] = clamp(Math.round((grid.colors[index * 3 + 2] ?? 0) * scale), 0, 255)
       } else {
-        const rank = MONO_RAMP.indexOf(grid.chars[index])
+        let usedRamp = ramp
+        let rank = usedRamp.indexOf(grid.chars[index])
+        if (rank < 0) {
+          usedRamp = MONO_RAMP
+          rank = usedRamp.indexOf(grid.chars[index])
+        }
         if (rank > 0) {
           const step = Math.max(1, Math.round(strength * 3))
-          grid.chars[index] = MONO_RAMP[Math.max(0, rank - step)]
+          grid.chars[index] = usedRamp[Math.max(0, rank - step)]
         }
       }
     }
@@ -220,11 +225,12 @@ export function applyEffects(
   grid: Grid,
   effects: readonly EffectSpec[],
   time: number,
-  meta: { fps: number; seed: number },
+  meta: { fps: number; seed: number; ramp?: string },
 ): Grid {
   const t = safeTime(time)
   const fps = safeFps(meta?.fps)
   const metaSeed = Math.trunc(numberOr(meta?.seed, 0))
+  const ramp = typeof meta?.ramp === "string" && meta.ramp.length >= 2 ? meta.ramp : MONO_RAMP
   let mutable = toMutable(grid)
 
   for (const spec of effects ?? []) {
@@ -244,7 +250,7 @@ export function applyEffects(
         twinkle(mutable, p, t, fps, metaSeed)
         break
       case "scanline":
-        scanline(mutable, p, t)
+        scanline(mutable, p, t, ramp)
         break
       default:
         break

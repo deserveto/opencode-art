@@ -28,6 +28,7 @@ export interface ArtState {
   readonly pack: Accessor<Pack | null>
   readonly style: Accessor<ResolvedStyle | null>
   readonly fps: Accessor<number>
+  readonly dim: Accessor<number>
   readonly enabled: Accessor<boolean>
   readonly animations: boolean
   readonly candidates: Accessor<readonly PackCandidate[]>
@@ -43,6 +44,9 @@ export interface ArtState {
   setPack(id: string): Promise<boolean>
   setStyle(style: StyleName): Promise<void>
   setFps(fps: number): Promise<void>
+  setDim(dim: number): Promise<void>
+  degradeStyle(style: ResolvedStyle): void
+  degradeFps(fps: number): void
   reload(): Promise<void>
   validate(target?: string): Promise<ValidationReport>
   load(id: string): Promise<Result<Pack, readonly PackError[]>>
@@ -67,7 +71,16 @@ type ToastVariant = "info" | "success" | "warning" | "error"
 type Notify = (text: string, variant?: ToastVariant) => void
 type NotifyOnce = (key: string, text: string, variant?: ToastVariant) => void
 
-async function createState(context: Context): Promise<ArtState> {
+export function watcherRoots(roots: ArtRoots): readonly string[] {
+  return [roots.projectArts, roots.globalArts, projectSettingsPath(roots.projectRoot)]
+}
+
+export interface ArtStateOptions {
+  readonly watchIntervalMs?: number
+  readonly watchDebounceMs?: number
+}
+
+async function createState(context: Context, options?: ArtStateOptions): Promise<ArtState> {
   let disposed = false
   const roots = artRoots(context.location?.directory)
   const animations = await readAnimations()
@@ -108,6 +121,7 @@ async function createState(context: Context): Promise<ArtState> {
         pack: globalStore.pack,
         style: globalStore.style,
         fps: globalStore.fps,
+        dim: globalStore.dim,
       }),
       updateGlobal: (mutation) => updateGlobal(mutation),
       projectPath: projectSettingsPath(roots.projectRoot),
@@ -119,6 +133,7 @@ async function createState(context: Context): Promise<ArtState> {
   const [pack, setPackValue] = createSignal<Pack | null>(null)
   const [style, setStyle] = createSignal<ResolvedStyle | null>(null)
   const [fps, setFps] = createSignal(10)
+  const [dim, setDimSignal] = createSignal(0)
   const [enabled, setEnabled] = createSignal(false)
   const [candidates, setCandidates] = createSignal<readonly PackCandidate[]>([])
   const [problems, setProblems] = createSignal<readonly PackProblem[]>([])
@@ -132,6 +147,8 @@ async function createState(context: Context): Promise<ArtState> {
   const cache = new Map<string, Pack>()
   let stopWatch: (() => void) | null = null
   let reloading = false
+  let reloadQueued = false
+  let reloadPromise: Promise<void> | null = null
   // shortcut: the host can hand plugin code Solid's SSR build (signals never
   // notify, OpenCode 2.3.2 does), so visual changes also push through these.
   const listeners = new Set<() => void>()
@@ -176,6 +193,7 @@ async function createState(context: Context): Promise<ArtState> {
     const effective = store.effective()
     setEnabled(effective.enabled)
     setFps(effective.fps ?? target.manifest.fps)
+    setDimSignal(effective.dim ?? 0)
     const resolved = resolveFor(target)
     setStyle(resolved)
     for (const warning of target.warnings.slice(0, 3)) {
@@ -289,6 +307,7 @@ async function createState(context: Context): Promise<ArtState> {
   async function start(): Promise<void> {
     const effective = store.effective()
     setEnabled(effective.enabled)
+    setDimSignal(effective.dim ?? 0)
     if (effective.pack && (await activate(effective.pack, false))) return
     if (effective.pack) {
       notifyOnce(`missing:${effective.pack}`, `Pack "${effective.pack}" was not found; using the bundled Fool.`)
@@ -299,29 +318,46 @@ async function createState(context: Context): Promise<ArtState> {
   }
 
   async function reload(): Promise<void> {
-    if (disposed || reloading) return
-    reloading = true
-    try {
-      cache.clear()
-      deepProblems.clear()
-      await store.reload()
-      index = await discoverPacks(roots.projectRoot, roots.globalArts, roots.bundledFrames)
-      refreshCandidates()
-      const target = currentId ?? store.effective().pack
-      if (target && (await activate(target, false))) return
-      if (current) {
-        notifyOnce(`lost:${target}`, "The active pack disappeared; keeping the last good frames.")
-        return
-      }
-      await fallback()
-    } catch (error) {
-      notifyOnce(`reload:${message(error)}`, `Reload failed: ${message(error)}`)
-    } finally {
-      setEnabled(store.effective().enabled)
-      emit()
-      syncWatcher()
-      reloading = false
+    if (disposed) return
+    if (reloading) {
+      reloadQueued = true
+      return reloadPromise ?? Promise.resolve()
     }
+    reloading = true
+    reloadPromise = (async () => {
+      try {
+        do {
+          reloadQueued = false
+          try {
+            cache.clear()
+            deepProblems.clear()
+            await store.reload()
+            index = await discoverPacks(roots.projectRoot, roots.globalArts, roots.bundledFrames)
+            refreshCandidates()
+            const target = store.project().pack ?? currentId ?? store.effective().pack
+            if (target && (await activate(target, false))) continue
+            if (current) {
+              notifyOnce(`lost:${target}`, "The active pack disappeared; keeping the last good frames.")
+              continue
+            }
+            await fallback()
+          } catch (error) {
+            notifyOnce(`reload:${message(error)}`, `Reload failed: ${message(error)}`)
+          }
+        } while (reloadQueued && !disposed)
+      } finally {
+        if (!disposed) {
+          const effective = store.effective()
+          setEnabled(effective.enabled)
+          setDimSignal(effective.dim ?? 0)
+          emit()
+          syncWatcher()
+        }
+        reloading = false
+        reloadPromise = null
+      }
+    })()
+    return reloadPromise
   }
 
   function syncWatcher(): void {
@@ -329,8 +365,10 @@ async function createState(context: Context): Promise<ArtState> {
     const shouldWatch = store.effective().enabled
     if (shouldWatch && !stopWatch) {
       stopWatch = startPolling({
-        roots: () => [roots.projectArts, roots.globalArts, roots.bundledFrames],
+        roots: () => watcherRoots(roots),
         onChanged: reload,
+        intervalMs: options?.watchIntervalMs,
+        debounceMs: options?.watchDebounceMs,
         onError: (text) => {
           console.error(`[opencode-art] watch error: ${text}`)
           notifyOnce(`watch:${text}`, `Watching arts failed: ${text}`)
@@ -383,8 +421,13 @@ async function createState(context: Context): Promise<ArtState> {
 
   async function setPack(id: string): Promise<boolean> {
     if (await activate(id, true)) {
-      const target = index.candidates.find((entry) => entry.id === id)
-      if (target) notify(`${target.manifest.name} (${target.id}, ${target.scope})`, "success")
+      const pinned = store.project().pack
+      if (pinned !== undefined && pinned !== id) {
+        notify(`Pack is pinned to "${pinned}" by this project's .opencode/art.json.`, "warning")
+      } else {
+        const target = index.candidates.find((entry) => entry.id === id)
+        if (target) notify(`${target.manifest.name} (${target.id}, ${target.scope})`, "success")
+      }
       return true
     }
     const problem = problems().find((entry) => entry.id === id)
@@ -399,13 +442,22 @@ async function createState(context: Context): Promise<ArtState> {
 
   async function setStyleValue(nextStyle: StyleName): Promise<void> {
     await store.setStyle(nextStyle)
+    const locked = store.project().style
     if (!current) {
-      notify(`Style set to ${nextStyle}; no pack is loaded.`)
+      if (locked !== undefined && locked !== nextStyle) {
+        notify(`Style is set to ${locked} by this project's .opencode/art.json.`, "warning")
+      } else {
+        notify(`Style set to ${nextStyle}; no pack is loaded.`)
+      }
       return
     }
     const resolved = resolveFor(current)
     setStyle(resolved)
     emit()
+    if (locked !== undefined && locked !== nextStyle) {
+      notify(`Style is set to ${locked} by this project's .opencode/art.json.`, "warning")
+      return
+    }
     if (resolved.effective !== nextStyle) {
       const available: StyleName[] = ["mono", "theme"]
       if (current.manifest.palette?.length) available.push("palette")
@@ -436,6 +488,38 @@ async function createState(context: Context): Promise<ArtState> {
       return
     }
     notify(`FPS: ${clamped}`, "success")
+  }
+
+  async function setDimValue(value: number): Promise<void> {
+    if (!Number.isFinite(value)) return
+    const rounded = Math.round(value)
+    const clamped = Math.min(80, Math.max(0, rounded))
+    await store.setDim(clamped)
+    const locked = store.project().dim
+    const effective = store.effective().dim ?? clamped
+    setDimSignal(effective)
+    emit()
+    if (locked !== undefined && locked !== clamped) {
+      notify(`Dim is set to ${locked}% by this project's .opencode/art.json.`, "warning")
+      return
+    }
+    if (clamped !== value) {
+      const reason = value < 0 || value > 80 ? `clamped to ${clamped}` : `rounded to ${clamped}`
+      notify(`Dim ${reason} (0–80%).`, "warning")
+      return
+    }
+    notify(`Dim: ${clamped}%`, "success")
+  }
+
+  function degradeStyle(nextStyle: ResolvedStyle): void {
+    setStyle(nextStyle)
+    emit()
+  }
+
+  function degradeFps(nextFps: number): void {
+    if (!Number.isFinite(nextFps)) return
+    setFps(Math.min(30, Math.max(1, Math.round(nextFps))))
+    emit()
   }
 
   async function validate(target?: string): Promise<ValidationReport> {
@@ -495,6 +579,7 @@ async function createState(context: Context): Promise<ArtState> {
     pack,
     style,
     fps,
+    dim,
     enabled,
     animations,
     candidates,
@@ -509,6 +594,9 @@ async function createState(context: Context): Promise<ArtState> {
     setPack,
     setStyle: setStyleValue,
     setFps: setFpsValue,
+    setDim: setDimValue,
+    degradeStyle,
+    degradeFps,
     reload,
     validate,
     load,
@@ -528,6 +616,7 @@ async function createState(context: Context): Promise<ArtState> {
     },
     dispose: () => {
       disposed = true
+      reloadQueued = false
       listeners.clear()
       if (stopWatch) stopWatch()
       stopWatch = null
@@ -540,6 +629,6 @@ async function createState(context: Context): Promise<ArtState> {
   return state
 }
 
-export async function createArtState(context: Context): Promise<ArtState> {
-  return createState(context)
+export async function createArtState(context: Context, options?: ArtStateOptions): Promise<ArtState> {
+  return createState(context, options)
 }

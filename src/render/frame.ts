@@ -6,7 +6,7 @@ import { fitGrid } from "./fit.ts"
 export function fitFrame(pack: Pack, frameIndex: number, cols: number, rows: number): Grid | null {
   if (pack.frames.length === 0) return null
   const index = Math.max(0, Math.min(pack.frames.length - 1, Math.floor(frameIndex)))
-  return fitGrid(pack.frames[index], cols, rows)
+  return fitGrid(pack.frames[index], cols, rows, pack.manifest.fit ?? "stretch")
 }
 
 /** Fit plus canvas effects, for callers that do not keep a fit cache. */
@@ -22,7 +22,7 @@ export function displayFrame(
   const fitted = fitFrame(pack, frameIndex, cols, rows)
   if (!fitted) return null
   if (pack.kind !== "canvas" || !animations || pack.manifest.effects.length === 0) return fitted
-  return applyEffects(fitted, pack.manifest.effects, time, { fps, seed: 0 })
+  return applyEffects(fitted, pack.manifest.effects, time, { fps, seed: 0, ramp: pack.manifest.ramp })
 }
 
 /** Stop chosen by brightness: `floor(brightness * count)`, clamped. */

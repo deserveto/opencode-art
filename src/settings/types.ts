@@ -10,6 +10,7 @@ export interface Settings {
   readonly pack?: string
   readonly style?: StyleName
   readonly fps?: number
+  readonly dim?: number
 }
 
 export const SETTINGS_VERSION = 1
@@ -21,6 +22,7 @@ export interface StorageSettings {
   pack?: string
   style?: StyleName
   fps?: number
+  dim?: number
 }
 
 /** Plugin defaults; `null` means "defer to the pack, then to these". */
@@ -37,6 +39,7 @@ export interface EffectiveSettings {
   readonly pack: string | null
   readonly style: StyleName | null
   readonly fps: number | null
+  readonly dim?: number
 }
 
 /** Merged view after pack defaults are applied. */
@@ -49,10 +52,12 @@ export interface ResolvedSettings {
 
 export interface SettingsStore {
   effective(): EffectiveSettings
+  project(): Settings
   setEnabled(value: boolean): Promise<void>
   setPack(id: string): Promise<void>
   setStyle(style: StyleName): Promise<void>
   setFps(fps: number): Promise<void>
+  setDim(dim: number): Promise<void>
   /** Re-reads the project file. Invalid fields keep their previous value. */
   reload(): Promise<void>
   /** Absolute project settings path, for `/art help` and docs. */

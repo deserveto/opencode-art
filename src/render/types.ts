@@ -39,6 +39,8 @@ export interface ResolvedStyle {
   readonly stops: readonly RGBA4[]
   /** True when per-cell sidecar color should be used. */
   readonly original: boolean
+  /** True when light-theme contrast lift should be applied to original cells. */
+  readonly lightLift?: boolean
 }
 
 /** A display grid plus its resolved style, ready for the renderable. */

@@ -83,11 +83,12 @@ For a canvas pack, replace `frames` with `"canvas": "canvas.txt"` and add `effec
 | `schemaVersion` | yes | `1`; a higher version is rejected with an update message |
 | `id` | yes | `^[a-z0-9][a-z0-9_-]{0,31}$`, equal to the folder name |
 | `name` | yes | 1-80 printable characters |
-| `description`, `author`, `license` | no | 500 / 80 / 40 characters; description and author must be printable; license is required for the public repo |
+| `description`, `author`, `license` | no | 500 / 80 / 40 characters; all three must be printable; license is required for the public repo |
 | `homepage` | no | `https://` URL, up to 200 characters |
 | `fps` | yes | 1-30 |
 | `cols`, `rows` | yes | 1-400 and 1-200; every line and frame must match exactly |
 | `defaultStyle` | no | `mono`, `theme`, `palette`, or `original`; default `mono` |
+| `fit` | no | `stretch`, `contain`, `cover`, or `center`; default `stretch` |
 | `ramp` | no | 2-64 unique width-1 glyphs, low to high density; default ` .:-=+*#%@` |
 | `palette` | no | 2-32 `#rrggbb` stops, low to high brightness |
 | `frames`, `canvas` | one of | relative paths; exactly one; 1-600 frames |
@@ -101,13 +102,13 @@ The bundled Fool is 180 x 50, 10 fps, 60 frames (6 second loop), ramp ` .:;-~=+*
 
 ```sh
 node bin/opencode-art.cjs init <dir> [--force]
-node bin/opencode-art.cjs bake <input> --out <dir> [--cols 180] [--rows 50] [--fps 10] [--loop 6] [--charset " .:-=+*#%@"] [--ramp ...] [--palette "#111111,#eeeeee"] [--colors 64] [--dither] [--mono] [--invert] [--aspect 0.5] [--timeout 60] [--force]
+node bin/opencode-art.cjs bake <input> --out <dir> [--cols 180] [--rows 50] [--fps 10] [--loop 6] [--charset " .:-=+*#%@"] [--ramp ...] [--palette "#111111,#eeeeee"] [--colors 64] [--dither] [--mono] [--invert] [--aspect 0.5] [--fit stretch] [--seed 0] [--timeout 60] [--force]
 node bin/opencode-art.cjs validate <dir>
-node bin/opencode-art.cjs preview <dir> [--frame N] [--width N]
+node bin/opencode-art.cjs preview <dir> [--frame N] [--width N] [--animate] [--loops N]
 node bin/opencode-art.cjs help
 ```
 
-When the package is installed, `opencode-art` is usually on `PATH`; use it in place of `node bin/opencode-art.cjs`. If it is not, use `node <repo-or-plugin>/bin/opencode-art.cjs`.
+When the package is installed, `opencode-art` is usually on `PATH`; use it in place of `node bin/opencode-art.cjs`. If it is not, use `node <repo-or-plugin>/bin/opencode-art.cjs` (`bin/opencode-art.cjs` registers a Node TS-strip hook so it works even inside `node_modules`).
 
 - `--charset` and `--ramp` are aliases. `--loop` is seconds for scene, GIF, and video input.
 - `--aspect 0.5` compensates for terminal cells being about twice as tall as wide.
@@ -126,9 +127,9 @@ export function scene(t, ctx) {
 ```
 
 - `t` is seconds, sampled at `frame / fps`; `ctx` is `{ cols, rows, frame, fps, palette, seed, helpers }`.
-- `meta` requires `fps`, `cols`, and `rows`; `loop` defaults to `6`.
+- `meta` requires `fps`, `cols`, and `rows`; `loop` defaults to `6` and `seed` is optional.
 - Return `string[]` (exactly `rows` strings of exactly `cols` width-1 chars) or `{ chars, colors }` (`colors` is `rows` arrays of `#rrggbb` or `null`; `null` uses the theme faint color). Trailing spaces are real cells, so keep every row at full width.
-- Use `ctx.seed` (currently `0`) for variation. Do not use `Math.random()`, `Date.now()`, timers, locale, or filesystem order. The bake uses fixed steps, so a deterministic scene re-bakes and loops identically.
+- Use `ctx.seed` (from `--seed`, `meta.seed`, or `0`) for variation. Do not use `Math.random()`, `Date.now()`, timers, locale, or filesystem order. The bake uses fixed steps, so a deterministic scene re-bakes and loops identically.
 - Use width-1 characters only: ASCII, box drawing, block elements. No emoji, CJK, combining marks, tabs, or control characters.
 - Helpers are exported from `opencode-art/scene`: `loadCanvas`, `wave`, `shimmer`, `drift`, `twinkle`, `scanline`, `palette`, `noise`, `clamp`, `lerp`. The same functions are available as `ctx.helpers` for a scene that cannot resolve the package; the example below is import-free so it bakes with any CLI build.
 - The CLI imports the scene in a child process with a timeout and memory cap. The plugin never loads a scene module, including `scene.mjs` inside a pack. Bake only scenes you trust.
@@ -235,7 +236,7 @@ Then run `/art set rainy-city` or wait for the watcher.
 | Project settings | `<project>/.opencode/art.json` | overrides global |
 | Global settings | OpenCode storage, not a pack file | overrides pack defaults |
 
-The effective style and fps come from project settings, then global settings, then the pack's `defaultStyle` and `fps`, then plugin defaults (`enabled: true`, style `mono`, fps `10`). The same id in a higher scope wins. Use project art for repo-specific art and user art for personal art.
+The effective style, fps, and dim (`0-80`) come from project settings, then global settings, then the pack's `defaultStyle` and `fps`, then plugin defaults (`enabled: true`, style `mono`, fps `10`, dim `0`). The same id in a higher scope wins. Use project art for repo-specific art and user art for personal art. The watcher polls project arts, user arts, and `<project>/.opencode/art.json`.
 
 ## Common failures
 

@@ -72,3 +72,29 @@ test("helpers do not mutate their input", () => {
   scanline(source, 1)
   assert.deepEqual(source, copy)
 })
+
+test("drift handles large and negative time without negative modulo or undefined", () => {
+  const source = grid()
+  for (const time of [500, -500, 12345.67]) {
+    for (const axis of ["x", "y"] as const) {
+      const shifted = drift(source, time, { axis, speed: 3 })
+      assert.equal(dims(shifted), "4x10")
+      assert.ok(shifted.chars.every((line) => !line.includes("undefined")))
+      assert.ok(shifted.colors)
+      assert.equal(shifted.colors.length, 4)
+      assert.ok(shifted.colors.every((row) => row.length === 10))
+    }
+  }
+})
+
+test("wave handles large amplitude without negative modulo or undefined", () => {
+  const source = grid()
+  for (const axis of ["x", "y"] as const) {
+    const waved = wave(source, 0.25, { axis, amplitude: 50, speed: 2 })
+    assert.equal(dims(waved), "4x10")
+    assert.ok(waved.chars.every((line) => !line.includes("undefined")))
+    assert.ok(waved.colors)
+    assert.equal(waved.colors.length, 4)
+    assert.ok(waved.colors.every((row) => row.length === 10))
+  }
+})

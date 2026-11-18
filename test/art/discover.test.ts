@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { mkdir, symlink, writeFile } from "node:fs/promises"
 import path from "node:path"
 import test from "node:test"
 import { discoverPacks } from "../../src/art/index.ts"
@@ -203,4 +204,40 @@ test("candidates carry manifest warnings and frame counts", async (t) => {
   assert.match(canvas.warnings.join("\n"), /mystery/)
   assert.equal(frames.animated, true)
   assert.equal(frames.frameCount, 2)
+})
+
+test("symlinked pack directories are discovered while file and broken symlinks are ignored", async (t) => {
+  const r = await roots(t)
+  const external = path.join(path.dirname(r.project), "shared-packs")
+  const targetDir = await addPack(external, "linked-pack")
+  await mkdir(r.projectArts, { recursive: true })
+  const linkDir = path.join(r.projectArts, "linked-pack")
+  try {
+    await symlink(targetDir, linkDir, "dir")
+  } catch {
+    if (process.platform === "win32") {
+      try {
+        await symlink(targetDir, linkDir, "junction")
+      } catch {
+        t.skip("directory symlinks are not permitted on this machine")
+        return
+      }
+    } else {
+      t.skip("directory symlinks are not permitted on this machine")
+      return
+    }
+  }
+
+  const looseFile = path.join(external, "loose.txt")
+  await writeFile(looseFile, "ignored\n")
+  try {
+    await symlink(looseFile, path.join(r.projectArts, "file-link"))
+    await symlink(path.join(external, "does-not-exist"), path.join(r.projectArts, "broken-link"), "dir")
+  } catch {
+    // Ignore if file or dangling symlinks are restricted; directory link still tests discovery.
+  }
+
+  const index = await discoverPacks(r.project, r.user, r.bundled)
+  assert.deepEqual(labels(index.candidates), ["project:linked-pack"])
+  assert.deepEqual(index.problems, [])
 })

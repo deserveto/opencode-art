@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { parseManifest } from "../../src/art/index.ts"
+import { FIT_MODES, parseManifest } from "../../src/art/index.ts"
+import { isPrintableText } from "../../src/art/manifest.ts"
 
 const base: Record<string, unknown> = {
   schemaVersion: 1,
@@ -186,4 +187,61 @@ test("source is accepted, string fields kept, unknown subfields ignored", () => 
   const objectSource = run({ source: { type: "scene", file: "scene.mjs", extra: 1 } })
   assert.deepEqual(objectSource.errors, [])
   assert.deepEqual(objectSource.manifest?.source, { type: "scene", file: "scene.mjs" })
+})
+
+test("fit is omitted when unspecified and validated against FIT_MODES when set", () => {
+  const omitted = run()
+  assert.deepEqual(omitted.errors, [])
+  assert.ok(omitted.manifest)
+  assert.equal("fit" in omitted.manifest, false)
+
+  for (const fit of FIT_MODES) {
+    const result = run({ fit })
+    assert.deepEqual(result.errors, [], fit)
+    assert.equal(result.manifest?.fit, fit)
+  }
+
+  const invalid = run({ fit: "fill" })
+  assert.match(messages(invalid.errors), /"fit": must be one of stretch, contain, cover, center/)
+  const nonString = run({ fit: 42 })
+  assert.match(messages(nonString.errors), /"fit": must be one of stretch, contain, cover, center/)
+})
+
+test("unknown fields inside effects emit warnings and are dropped", () => {
+  const result = run({
+    effects: [{ type: "shimmer", intensity: 0.4, bogus: true, extraDepth: 3 }],
+  })
+  assert.deepEqual(result.errors, [])
+  assert.deepEqual(result.manifest?.effects, [{ type: "shimmer", intensity: 0.4 }])
+  assert.deepEqual(result.warnings, [
+    'art.json: unknown field "effects[0].bogus" ignored',
+    'art.json: unknown field "effects[0].extraDepth" ignored',
+  ])
+})
+
+test("isPrintableText rejects bidi overrides, format characters, and line separators", () => {
+  assert.equal(isPrintableText("CC-BY-4.0 — valid text"), true)
+  for (const bad of [
+    "bad\u202Eoverride",
+    "zero\u200Bwidth",
+    "rtl\u200Fmark",
+    "isolate\u2066text",
+    "bom\uFEFFchar",
+    "line\u2028sep",
+    "para\u2029sep",
+    "ctrl\u0007bell",
+    "del\u007fchar",
+    "c1\u009bcsi",
+  ]) {
+    assert.equal(isPrintableText(bad), false, JSON.stringify(bad))
+  }
+})
+
+test("license and other text fields reject bidi overrides and non-printable characters", () => {
+  assert.match(messages(run({ license: "MIT\u202Etxt" }).errors), /"license": must contain printable/)
+  assert.match(messages(run({ license: "MIT\nApache" }).errors), /"license": must contain printable/)
+  assert.match(messages(run({ license: "MIT\u2028" }).errors), /"license": must contain printable/)
+  assert.match(messages(run({ name: "art\u202E" }).errors), /"name": must contain printable/)
+  assert.match(messages(run({ description: "a\u2029b" }).errors), /"description": must contain printable/)
+  assert.match(messages(run({ author: "a\u200Bb" }).errors), /"author": must contain printable/)
 })

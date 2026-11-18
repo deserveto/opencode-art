@@ -15,6 +15,7 @@ Subcommand names are case-insensitive.
 | `/art set <id>` | Select a pack by id. An unknown id shows close matches. |
 | `/art style <mono\|theme\|palette\|original>` | Set the color style globally. |
 | `/art fps <1-30>` | Set playback fps. The value is rounded, then clamped to 1-30. |
+| `/art dim <0-80>` | Dim foreground colors toward the theme background (0-80%). Value is rounded, then clamped to 0-80. |
 | `/art reload` | Re-read the project settings, re-scan every arts folder, and reload the active pack. Reports the active id, pack count, and problem count. |
 | `/art validate [id\|path]` | Validate one pack or every pack. See below. |
 | `/art help` | Show the command list and the three arts paths. |
@@ -44,33 +45,35 @@ pack loads; a bad pack never partially renders.
 ## Dialog
 
 ```text
-+ ASCII Art ---------------------------------------------------+
-| Packs (3)                                                    |
-| > fool          bundled   The Fool                           |
-|   logo          user      Shimmer Mark                       |
-|   rain          project   Rain                               |
-| Preview: The Fool                                            |
-| Styles: mono · theme · palette · original                    |
-| Enabled: yes   Style: mono   FPS: 10   Frames: 60            |
-| Problems: rain: art.json: expected 8 rows, found 7           |
-| Up/Down select · Enter apply · s style · Left/Right fps      |
-| e enabled · r reload · Esc/q close · truecolor                 |
-| Create art by asking the agent in chat                       |
-| ~/.config/opencode/arts                                      |
-+--------------------------------------------------------------+
++ ASCII Art -------------------------------------------------------------------+
+| Packs (3) · active: fool                                                     |
+| > fool*         bundled   The Fool                                           |
+|   logo          user      Shimmer Mark                                       |
+|   rain          project   Rain                                               |
+| Preview: The Fool                                                            |
+| Styles: mono · theme · palette · original                                    |
+| Enabled: yes   Style: mono   FPS: 10   Dim: 0%   Frames: 1/60                |
+| Problems: rain: art.json: expected 8 rows, found 7                           |
+| Up/Down select · Enter apply · / filter · s style · d dim · p play           |
+| [/] frame · Left/Right fps · e on/off · r reload · Esc/q close               |
+| * active · truecolor · Create art in chat · ~/.config/opencode/arts          |
++------------------------------------------------------------------------------+
 ```
 
-The exact layout adjusts to the terminal size. The preview is a still frame of
-the selected pack, fitted to the preview area, in the effective style. It does
-not animate.
+The exact layout adjusts to the terminal size. The preview shows the selected
+pack fitted to the preview area (using its `fit` mode), in the effective style,
+with the current `dim` setting. It starts paused on frame 0; press `p` to
+animate it or `[` / `]` to step frames.
 
-The pack list shows the id, scope (`project`, `user`, or `bundled`), an
-`active` marker, and a shortened display name. The preview line lists the
-styles available for that pack.
+The pack list shows the id, an `*` active marker, scope (`project`, `user`, or
+`bundled`), and a shortened display name. When more than 12 packs match, it
+scrolls in a 12-row window around the selection with `↑ N more` / `↓ M more`
+indicators. Press `/` to filter packs by id or name.
 
 The status line reports `Enabled`, the effective `Style` (with the requested
-style when it differs), `FPS`, and whether the pack is a canvas or how many
-frames it has. Status is text, not color alone.
+style when it differs), `FPS`, `Dim`, and either `Canvas` or
+`Frames: <current>/<total>` (plus `(playing)` while animating). Status is text,
+not color alone.
 
 The Problems section lists up to four invalid packs with the first error for
 each. Invalid packs are not selectable.
@@ -79,21 +82,26 @@ each. Invalid packs are not selectable.
 
 | Key | Action |
 |---|---|
-| `Up` / `k` | Select the previous pack. |
-| `Down` / `j` | Select the next pack. |
+| `Up` / `k` | Select the previous pack (arrows also work in filter mode). |
+| `Down` / `j` | Select the next pack (arrows also work in filter mode). |
 | `Enter` | Apply the selected pack and persist it globally. |
+| `/` | Filter packs by id or name (`Backspace` deletes, `Enter` or `Esc` exits filter mode). |
 | `s` | Cycle through the styles available for the selected pack. |
+| `d` | Cycle dimming through `0%`, `25%`, `50%`, and `75%` and persist globally. |
+| `p` | Play or pause preview animation. |
+| `[` / `]` | Step backward or forward one preview frame (or effect step) and pause animation. |
 | `Left` / `-` | Decrease fps by 1. |
 | `Right` / `+` / `=` | Increase fps by 1. |
 | `e` | Toggle enabled. |
 | `r` | Reload packs and refresh the preview. |
-| `Esc` / `q` | Close the dialog. |
+| `Esc` / `q` | Close the dialog (outside filter mode). |
 
 Available styles start with `mono` and `theme`. `palette` is added when the
 pack declares a palette. `original` is added when at least one frame has color
 sidecar data.
 
-Changes apply live and persist to global settings. FPS is clamped to 1-30.
+Changes apply live and persist to global settings. FPS is clamped to 1-30 and
+dimming is clamped to 0-80% (`/art dim <0-80>` sets any integer in that range).
 When a requested style is unavailable, the status line and a toast explain the
 effective style.
 
@@ -106,7 +114,7 @@ The plugin reads four layers, highest priority first:
 | Project | `<project>/.opencode/art.json` | You, by hand |
 | Global | OpenCode durable storage under the `settings` key | `/art` and the dialog |
 | Pack defaults | `defaultStyle` and `fps` in `art.json` | Pack author |
-| Plugin defaults | `enabled: true`, `pack: "fool"`, `style: "mono"`, `fps` from the pack | Fixed |
+| Plugin defaults | `enabled: true`, `pack: "fool"`, `style: "mono"`, `fps` from the pack, `dim: 0` | Fixed |
 
 The project file is committed and shared. Its shape:
 
@@ -116,14 +124,18 @@ The project file is committed and shared. Its shape:
   "enabled": true,
   "pack": "fool",
   "style": "mono",
-  "fps": 10
+  "fps": 10,
+  "dim": 0
 }
 ```
 
-All fields are optional. A field that is absent falls through to the next
-layer. A project value wins when settings load. A pack selected in the dialog
-or with `/art set` is written to global settings and used in later sessions; a
-project `pack` still wins on load.
+All fields are optional (`dim` accepts an integer from `0` to `80`). A field
+that is absent falls through to the next layer. A project value wins when
+settings load and on reload. A pack selected in the dialog or with `/art set`
+is written to global settings and used in later sessions; if the project sets
+`pack`, `style`, `fps`, `dim`, or `enabled`, the project value takes precedence
+and the plugin explains that in a toast when a conflicting global change is
+made.
 
 The plugin never writes the project file. This is deliberate: changing a
 repository's settings is your decision, not a side effect of opening a dialog.
@@ -159,10 +171,13 @@ but the project value still wins; the plugin says so in a toast.
 
 ## Watch
 
-Pack folders are polled every 2 seconds. The poll hashes directory mtimes,
-file names, sizes, and mtimes, then waits 500 ms after a change before
-reloading. A change re-scans all scopes, re-validates, and reloads the active
-pack if it changed.
+The project arts folder (`<project>/.opencode/arts`), user arts folder
+(`~/.config/opencode/arts`), and project settings file
+(`<project>/.opencode/art.json`) are polled every 2 seconds (bundled frames are
+not polled). The poll hashes file sizes and mtimes plus directory structure,
+then waits 500 ms after a change before reloading. A change re-reads project
+settings, re-scans all scopes, re-validates, and reloads the active pack if it
+changed.
 
 If the active pack disappears or becomes invalid, the last good frames stay on
 screen. If there are none, the bundled Fool is used. Polling stops when art is

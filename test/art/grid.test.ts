@@ -110,3 +110,33 @@ test("a huge line-count mismatch returns bounded errors", () => {
 test("isWidthOne rejects the Yijing block that some terminals draw wide", () => {
   assert.equal(isWidthOne("\u4DC0"), false)
 })
+
+test("isWidthOne and parseGrid reject Private Use Area characters", () => {
+  for (const char of ["\uE000", "\uE0B0", "\uF8FF"]) {
+    assert.equal(isWidthOne(char), false, JSON.stringify(char))
+    assert.match(messages(parseGrid(`${char}a\n`, 2, 1, "a.txt").errors), /width-1/)
+  }
+})
+
+test("isWidthOne and parseGrid reject BMP wide emoji and symbol ranges", () => {
+  const samples = [
+    "\u23F1",
+    "\u23F2",
+    "\u261D",
+    "\u26F0",
+    "\u26F1",
+    "\u26F4",
+    "\u26F7",
+    "\u26F9",
+    "\u2708",
+    "\u2709",
+    "\u270C",
+    "\u270D",
+    "\u2764",
+  ]
+  for (const char of samples) {
+    assert.equal(isWidthOne(char), false, JSON.stringify(char))
+    const code = char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")
+    assert.match(messages(parseGrid(`${char}a\n`, 2, 1, "a.txt").errors), new RegExp(`U\\+${code}`))
+  }
+})

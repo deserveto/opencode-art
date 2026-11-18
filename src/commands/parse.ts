@@ -10,6 +10,7 @@ export type ArtCommand =
   | { readonly kind: "set"; readonly id?: string }
   | { readonly kind: "style"; readonly style?: string }
   | { readonly kind: "fps"; readonly value?: string }
+  | { readonly kind: "dim"; readonly value?: string }
   | { readonly kind: "unknown"; readonly input: string }
 
 export function parseArtCommand(input?: string): ArtCommand {
@@ -32,6 +33,8 @@ export function parseArtCommand(input?: string): ArtCommand {
       return { kind: "style", style: tokens[1]?.toLowerCase() }
     case "fps":
       return { kind: "fps", value: tokens[1] }
+    case "dim":
+      return { kind: "dim", value: tokens[1] }
     default:
       return { kind: "unknown", input: name }
   }

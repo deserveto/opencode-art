@@ -16,7 +16,9 @@ only inside the authoring CLI, on the author's machine.
 
 The `opencode-art` CLI is an author-time tool. It ships with the authoring
 milestone and is included in this repository. It needs Node 22.18 or newer.
-The plugin never imports it and never runs scene code.
+`bin/opencode-art.cjs` registers a Node TypeScript-stripping hook
+([strip-ts.cjs](../bin/strip-ts.cjs)) so the CLI works even when installed
+inside `node_modules`. The plugin never imports it and never runs scene code.
 
 You can also create a pack without the CLI:
 
@@ -96,6 +98,8 @@ module produces frames.
 | `--mono` | Force a mono pack with no color sidecars. Conflicts with `--palette`. | off |
 | `--invert` | Invert luminance. | off |
 | `--aspect` | Sample aspect ratio. Terminal cells are about twice as tall as wide. | `0.5` |
+| `--fit` | Fit mode written to `art.json`: `stretch`, `contain`, `cover`, or `center`. | omitted (`stretch` at runtime) |
+| `--seed` | Integer seed passed to scene `ctx.seed`. | `0` (or `meta.seed`) |
 | `--timeout` | Scene timeout in seconds. | `60` |
 | `--force` | Bypass the output-directory safety check. | off |
 
@@ -120,11 +124,14 @@ Behavior:
 Validates a pack and prints errors with file and line (up to 100, then a
 count). Exit code 1 on failure. This is the same validation the loader uses.
 
-### `preview <dir> [--frame N] [--width N]`
+### `preview <dir> [--frame N] [--width N] [--animate] [--loops N]`
 
-Prints a downscaled still preview to stdout. It does not animate. The default
-width is 80, and `--frame` clamps to the last frame. Use it to check dimensions
-and density before opening the TUI.
+Prints a downscaled preview to stdout using the pack's `fit` mode (`stretch` by
+default). Without `--animate`, it prints a single still frame (default `--frame
+0`, clamped to the last frame). Pass `--animate` to play all frames at the
+pack's `fps`, and `--loops N` (1-20, default `1`) to repeat the loop. The
+default width is 80. Use it to check dimensions, framing, and density before
+opening the TUI.
 
 ### `help`
 
@@ -186,9 +193,9 @@ characters. `colors` is optional. `null` means the default style color.
 
 Scene rules:
 
-- Use `t` in seconds and `ctx.seed` for randomness.
+- Use `t` in seconds and `ctx.seed` for randomness (`--seed` overrides `meta.seed`, defaulting to `0`).
 - Do not use `Math.random()` or `Date.now()`. The bake uses fixed timesteps.
-- `meta` is required, with `fps`, `cols`, and `rows`. `loop` defaults to 6.
+- `meta` is required, with `fps`, `cols`, and `rows`. `loop` defaults to 6, and `seed` is optional.
 - The CLI imports the scene in a child process with a 60 second timeout and a
   memory cap. A crash or hang fails the bake, not the plugin.
 

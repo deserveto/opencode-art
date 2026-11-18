@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { CAPS, PACK_ID_PATTERN, isWidthOne, loadPack, validatePackDir } from "../art/index.ts"
-import type { Pack } from "../art/types.ts"
+import { CAPS, FIT_MODES, PACK_ID_PATTERN, isWidthOne, loadPack, validatePackDir } from "../art/index.ts"
+import type { FitMode, Pack } from "../art/types.ts"
 import { fitGrid } from "../render/fit.ts"
 import { flagBool, flagString, parseArgs, unknownFlags, type FlagValue } from "./args.ts"
 import { runChild } from "./child.ts"
@@ -38,7 +38,7 @@ Usage:
   opencode-art init <dir> [--force]
   opencode-art bake <input> --out <dir> [options]
   opencode-art validate <dir>
-  opencode-art preview <dir> [--frame N] [--width N]
+  opencode-art preview <dir> [--frame N] [--width N] [--animate] [--loops N]
   opencode-art help
 
 Bake input:
@@ -59,10 +59,18 @@ Bake options:
   --mono            force a mono pack (no color sidecars)
   --invert          invert luminance
   --aspect <n>      source aspect correction (default ${DEFAULT_ASPECT})
+  --fit <mode>      fit mode: ${FIT_MODES.join(", ")} (default stretch)
+  --seed <n>        integer seed passed to scene ctx.seed (default 0)
   --timeout <s>     scene timeout, seconds (default ${DEFAULT_TIMEOUT_S})
   --force           overwrite an output directory that is not a pack
 
-Preview prints a still frame to stdout. Validate prints every error with file
+Preview options:
+  --frame <n>       frame index to print (default 0)
+  --width <n>       output width in columns, 1-${CAPS.cols} (default 80)
+  --animate         play all frames in the terminal
+  --loops <n>       loop count for --animate, 1-20 (default 1)
+
+Preview prints a still frame (or animates with --animate) to stdout. Validate prints every error with file
 and line. Exit codes: 0 success, 1 validation or user error, 2 unexpected.
 The plugin never runs scene code; only this CLI does, in a child process.`
 
@@ -115,6 +123,15 @@ function parseRamp(flags: ReadonlyMap<string, FlagValue>): string {
     if (!isWidthOne(char)) throw new CliError(`--ramp contains a non-width-1 character ${JSON.stringify(char)}`)
   }
   return raw
+}
+
+function parseFit(flags: ReadonlyMap<string, FlagValue>): FitMode | undefined {
+  const raw = flags.get("fit")
+  if (raw === undefined) return undefined
+  if (typeof raw !== "string" || !FIT_MODES.includes(raw as FitMode)) {
+    throw new CliError(`--fit must be one of ${FIT_MODES.join(", ")}`)
+  }
+  return raw as FitMode
 }
 
 function parsePalette(flags: ReadonlyMap<string, FlagValue>): readonly Rgb[] | undefined {
@@ -264,19 +281,29 @@ async function commandValidate(positionals: readonly string[], flags: ReadonlyMa
   return 1
 }
 
-function printPackFrame(pack: Pack, index: number, width: number): void {
+function formatPackFrame(pack: Pack, index: number, width: number): string[] {
   const frame = pack.frames[index]
   if (!frame) throw new CliError(`pack has no frame ${index}`)
   const rows = Math.max(1, Math.min(60, Math.round((pack.manifest.rows * width) / pack.manifest.cols)))
-  const grid = fitGrid(frame, width, rows)
+  const grid = fitGrid(frame, width, rows, pack.manifest.fit ?? "stretch")
+  const lines: string[] = []
   for (let y = 0; y < grid.rows; y++) {
-    console.log(grid.chars.slice(y * grid.cols, (y + 1) * grid.cols))
+    lines.push(grid.chars.slice(y * grid.cols, (y + 1) * grid.cols))
+  }
+  return lines
+}
+
+function printPackFrame(pack: Pack, index: number, width: number): void {
+  for (const line of formatPackFrame(pack, index, width)) {
+    console.log(line)
   }
 }
 
 async function commandPreview(positionals: readonly string[], flags: ReadonlyMap<string, FlagValue>): Promise<number> {
-  checkFlags(flags, ["frame", "width"])
-  const dir = path.resolve(expandHome(requirePositional(positionals, 0, "opencode-art preview <dir> [--frame N] [--width N]")))
+  checkFlags(flags, ["frame", "width", "animate", "loops"])
+  const dir = path.resolve(
+    expandHome(requirePositional(positionals, 0, "opencode-art preview <dir> [--frame N] [--width N] [--animate] [--loops N]")),
+  )
   const loaded = await loadPack(dir)
   if (!loaded.ok) {
     for (const error of loaded.error) console.log(formatError(error))
@@ -284,7 +311,31 @@ async function commandPreview(positionals: readonly string[], flags: ReadonlyMap
   }
   const frame = clampIndex(parseInteger(flags, "frame", 0, -1_000_000, 1_000_000), loaded.value.frames.length)
   const width = parseInteger(flags, "width", 80, 1, CAPS.cols)
-  printPackFrame(loaded.value, frame, width)
+  const animate = flagBool(flags, "animate")
+  const loops = parseInteger(flags, "loops", 1, 1, 20)
+  if (!animate) {
+    printPackFrame(loaded.value, frame, width)
+    return 0
+  }
+  const frameCount = loaded.value.frames.length
+  const delayMs = Math.max(1, Math.round(1000 / Math.max(1, loaded.value.manifest.fps)))
+  for (let loop = 0; loop < loops; loop++) {
+    for (let index = 0; index < frameCount; index++) {
+      const lines = formatPackFrame(loaded.value, index, width)
+      const isLast = loop === loops - 1 && index === frameCount - 1
+      if (process.stdout.isTTY) {
+        const prefix = loop === 0 && index === 0 ? "\x1b[2J\x1b[H" : "\x1b[H"
+        process.stdout.write(`${prefix}${lines.join("\n")}${isLast ? "\n" : ""}`)
+      } else {
+        if (loop > 0 || index > 0) console.log("")
+        console.log(`--- frame ${index + 1}/${frameCount} ---`)
+        for (const line of lines) console.log(line)
+      }
+      if (!isLast) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+      }
+    }
+  }
   return 0
 }
 
@@ -303,6 +354,7 @@ async function bakeScene(
   timeoutMs: number,
 ): Promise<{ frames: GlyphFrame[]; meta: SceneOutput["meta"]; palette?: readonly Rgb[] }> {
   const runner = fileURLToPath(new URL("../scene/runner.ts", import.meta.url))
+  const stripHook = fileURLToPath(new URL("../../bin/strip-ts.cjs", import.meta.url))
   const temp = await mkdtemp(path.join(tmpdir(), "opencode-art-scene-"))
   const output = path.join(temp, "frames.json")
   const pass = (name: string): string => flagString(flags, name) ?? "-"
@@ -310,7 +362,7 @@ async function bakeScene(
   try {
     const result = await runChild(
       process.execPath,
-      [runner, input, output, pass("fps"), pass("cols"), pass("rows"), pass("loop"), paletteArg],
+      ["--require", stripHook, runner, input, output, pass("fps"), pass("cols"), pass("rows"), pass("loop"), paletteArg, pass("seed")],
       {
         timeoutMs,
         collectStdout: false,
@@ -360,7 +412,7 @@ async function bakeScene(
           const index = (y * raw.meta.cols + x) * 3
           colors[index] = rgb.r
           colors[index + 1] = rgb.g
-          colors[index + 2] = rgb.b
+          colors[index + 2] = rgb.r === 0 && rgb.g === 0 && rgb.b === 0 ? 1 : rgb.b
         }
       }
       return { cols: raw.meta.cols, rows: raw.meta.rows, chars, colors }
@@ -376,7 +428,9 @@ function collectSamples(frames: readonly GlyphFrame[]): Uint8Array {
   for (const frame of frames) {
     if (!frame.colors) continue
     for (let index = 0; index < frame.chars.length; index++) {
-      if (frame.chars[index] !== " ") cells++
+      if (frame.chars[index] === " ") continue
+      if (frame.colors[index * 3] === 0 && frame.colors[index * 3 + 1] === 0 && frame.colors[index * 3 + 2] === 0) continue
+      cells++
     }
   }
   const stride = Math.max(1, Math.floor(cells / 400_000))
@@ -388,12 +442,16 @@ function collectSamples(frames: readonly GlyphFrame[]): Uint8Array {
     if (!frame.colors) continue
     for (let index = 0; index < frame.chars.length; index++) {
       if (frame.chars[index] === " ") continue
+      const r = frame.colors[index * 3]
+      const g = frame.colors[index * 3 + 1]
+      const b = frame.colors[index * 3 + 2]
+      if (r === 0 && g === 0 && b === 0) continue
       seen++
       if (seen % stride !== 0) continue
       if (offset + 3 > samples.length) break
-      samples[offset] = frame.colors[index * 3]
-      samples[offset + 1] = frame.colors[index * 3 + 1]
-      samples[offset + 2] = frame.colors[index * 3 + 2]
+      samples[offset] = r
+      samples[offset + 1] = g
+      samples[offset + 2] = b
       offset += 3
     }
   }
@@ -419,7 +477,25 @@ async function attempt<T>(label: string, action: () => Promise<T>): Promise<T> {
 }
 
 async function commandBake(positionals: readonly string[], flags: ReadonlyMap<string, FlagValue>): Promise<number> {
-  checkFlags(flags, ["out", "cols", "rows", "fps", "loop", "charset", "ramp", "palette", "colors", "dither", "mono", "invert", "aspect", "force", "timeout"])
+  checkFlags(flags, [
+    "out",
+    "cols",
+    "rows",
+    "fps",
+    "loop",
+    "charset",
+    "ramp",
+    "palette",
+    "colors",
+    "dither",
+    "mono",
+    "invert",
+    "aspect",
+    "force",
+    "timeout",
+    "seed",
+    "fit",
+  ])
   const input = path.resolve(expandHome(requirePositional(positionals, 0, "opencode-art bake <input> --out <dir>")))
   const outFlag = flagString(flags, "out")
   if (!outFlag) throw new CliError("missing --out <dir>")
@@ -430,6 +506,8 @@ async function commandBake(positionals: readonly string[], flags: ReadonlyMap<st
   const loop = parseNumber(flags, "loop", DEFAULT_LOOP, 0.1, 600)
   const colors = parseInteger(flags, "colors", DEFAULT_COLORS, 2, 256)
   const aspect = parseNumber(flags, "aspect", DEFAULT_ASPECT, 0.05, 4)
+  parseInteger(flags, "seed", 0, -2_147_483_648, 2_147_483_647)
+  const fit = parseFit(flags)
   const ramp = parseRamp(flags)
   const declaredPalette = parsePalette(flags)
   const dither = flagBool(flags, "dither")
@@ -503,6 +581,7 @@ async function commandBake(positionals: readonly string[], flags: ReadonlyMap<st
       cols: actualCols,
       rows: actualRows,
       ramp,
+      fit,
       kind: outputKind,
       frames,
       palette,

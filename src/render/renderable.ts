@@ -1,9 +1,9 @@
 import { RGBA, Renderable } from "@opentui/core"
 import type { OptimizedBuffer, RenderContext, RenderableOptions } from "@opentui/core"
-import type { Grid, Pack } from "../art/types.ts"
+import type { Grid, Pack, StyleName } from "../art/types.ts"
 import { applyEffects } from "../effects/index.ts"
 import { brightnessAt } from "./brightness.ts"
-import { hexToRgba4, quantizeForCapability } from "./colors.ts"
+import { contrastAdjust, hexToRgba4, quantizeForCapability } from "./colors.ts"
 import { computePaintArea, fitFrame, stopIndexFor } from "./frame.ts"
 import { Player } from "./player.ts"
 import { resolveStyle } from "./styles.ts"
@@ -14,6 +14,7 @@ export interface ArtRenderableOptions extends RenderableOptions<ArtRenderable> {
   /** `resolvedStyle`, not `style`: the reconciler treats a `style` prop as a style bag. */
   readonly resolvedStyle?: ResolvedStyle
   readonly fps?: number
+  readonly dim?: number
   readonly enabled?: boolean
   readonly paused?: boolean
   readonly animations?: boolean
@@ -21,6 +22,9 @@ export interface ArtRenderableOptions extends RenderableOptions<ArtRenderable> {
   readonly theme?: ThemeColors
   readonly onError?: (message: string) => void
   readonly onDegrade?: (message: string) => void
+  readonly onStyleDegrade?: (style: ResolvedStyle, message: string) => void
+  readonly onFpsDegrade?: (fps: number, message: string) => void
+  readonly onDestroy?: () => void
 }
 
 const FALLBACK_STYLE: ResolvedStyle = {
@@ -33,6 +37,7 @@ const FALLBACK_STYLE: ResolvedStyle = {
 const MAX_STYLE_STOPS = 32
 const MAX_FIT_FRAMES = 60
 const MAX_ORIGINAL_COLORS = 4096
+const MAX_DIM = 80
 const SAMPLE_WINDOW = 30
 const SLOW_FRAME_MS = 12
 const VERY_SLOW_FRAME_MS = 20
@@ -52,6 +57,11 @@ function finiteOr(value: number | undefined, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback
 }
 
+function clampDim(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0
+  return Math.min(MAX_DIM, Math.max(0, value))
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -64,13 +74,21 @@ function errorMessage(error: unknown): string {
 export class ArtRenderable extends Renderable {
   private _pack: Pack | null = null
   private _style: ResolvedStyle = FALLBACK_STYLE
+  private _userRequestedStyle: StyleName | undefined
+  private _degradedStyle: ResolvedStyle | null = null
   private _fps: number | undefined
+  private _userFps: number | undefined
+  private _degradedFps: number | null = null
+  private _dim = 0
   private _enabled = true
   private _paused = false
   private _animations = true
   private _theme: ThemeColors | undefined
   private _onError: ((message: string) => void) | undefined
   private _onDegrade: ((message: string) => void) | undefined
+  private _onStyleDegrade: ((style: ResolvedStyle, message: string) => void) | undefined
+  private _onFpsDegrade: ((fps: number, message: string) => void) | undefined
+  private _onDestroy: (() => void) | undefined
 
   private _player = new Player({ frameCount: 1, fps: 10, animated: true, staticCanvas: false })
   private _fitCache: FitCache | null = null
@@ -81,6 +99,7 @@ export class ArtRenderable extends Renderable {
   private _stopColorsFor: ResolvedStyle | null = null
   private _originalColors = new Map<number, RGBA>()
   private _originalFallback: RGBA | null = null
+  private _bgRgba: RGBA | null = null
 
   private _samples: number[] = []
   private _degraded = false
@@ -100,12 +119,19 @@ export class ArtRenderable extends Renderable {
     this._theme = options.theme
     this._onError = options.onError
     this._onDegrade = options.onDegrade
-    this._fps = typeof options.fps === "number" && Number.isFinite(options.fps) ? options.fps : undefined
+    this._onStyleDegrade = options.onStyleDegrade
+    this._onFpsDegrade = options.onFpsDegrade
+    this._onDestroy = options.onDestroy
+    const initialFps = typeof options.fps === "number" && Number.isFinite(options.fps) ? options.fps : undefined
+    this._fps = initialFps
+    this._userFps = initialFps
+    this._dim = clampDim(options.dim)
     this._enabled = options.enabled !== false
     this._paused = options.paused === true
     this._animations = options.animations !== false
     this._pack = options.pack ?? null
     this._style = options.resolvedStyle ?? FALLBACK_STYLE
+    this._userRequestedStyle = this._style.requested
     this.rebuildPlayer()
     this.updateAnimation()
     this.safeRequestRender()
@@ -124,6 +150,13 @@ export class ArtRenderable extends Renderable {
     const next = value ?? null
     if (next === this._pack) return
     this._pack = next
+    this._stopped = false
+    this._errorCount = 0
+    this._degraded = false
+    this._degradedStyle = null
+    this._fpsReduced = false
+    this._degradedFps = null
+    this._fps = this._userFps
     this.invalidate()
     this.rebuildPlayer()
     this.updateAnimation()
@@ -136,6 +169,13 @@ export class ArtRenderable extends Renderable {
   set resolvedStyle(value: ResolvedStyle | undefined) {
     const next = value ?? FALLBACK_STYLE
     if (next === this._style) return
+    if (this._degraded && this._degradedStyle && next.requested === this._userRequestedStyle) {
+      this._style = this._degradedStyle
+      return
+    }
+    this._degraded = false
+    this._degradedStyle = null
+    this._userRequestedStyle = next.requested
     this._style = next
     this.invalidate()
   }
@@ -146,10 +186,33 @@ export class ArtRenderable extends Renderable {
 
   set fps(value: number | undefined) {
     const next = typeof value === "number" && Number.isFinite(value) ? value : undefined
+    if (this._fpsReduced && this._degradedFps !== null) {
+      if (next === this._degradedFps || next === this._userFps) return
+    }
+    if (next !== this._userFps) {
+      this._fpsReduced = false
+      this._degradedFps = null
+    }
+    this._userFps = next
     if (next === this._fps) return
     this._fps = next
     this._player.setFps(this.effectiveFps())
     this.updateAnimation()
+  }
+
+  get dim(): number {
+    return this._dim
+  }
+
+  set dim(value: number | undefined) {
+    const next = clampDim(value)
+    if (next === this._dim) return
+    this._dim = next
+    this._stopColors = null
+    this._stopColorsFor = null
+    this._originalColors.clear()
+    this._originalFallback = null
+    this.safeRequestRender()
   }
 
   get enabled(): boolean {
@@ -160,8 +223,13 @@ export class ArtRenderable extends Renderable {
     const next = value !== false
     if (next === this._enabled) return
     this._enabled = next
-    if (next) this._cleared = false
-    if (!next) this._player.reset()
+    if (next) {
+      this._cleared = false
+      this._stopped = false
+      this._errorCount = 0
+    } else {
+      this._player.reset()
+    }
     this.invalidate()
     this.updateAnimation()
   }
@@ -203,6 +271,7 @@ export class ArtRenderable extends Renderable {
   set theme(value: ThemeColors | undefined) {
     this._theme = value
     this._originalFallback = null
+    this._bgRgba = null
     this.invalidate()
   }
 
@@ -220,6 +289,38 @@ export class ArtRenderable extends Renderable {
 
   set onDegrade(value: ((message: string) => void) | undefined) {
     this._onDegrade = value
+  }
+
+  get onStyleDegrade(): ((style: ResolvedStyle, message: string) => void) | undefined {
+    return this._onStyleDegrade
+  }
+
+  set onStyleDegrade(value: ((style: ResolvedStyle, message: string) => void) | undefined) {
+    this._onStyleDegrade = value
+  }
+
+  get onFpsDegrade(): ((fps: number, message: string) => void) | undefined {
+    return this._onFpsDegrade
+  }
+
+  set onFpsDegrade(value: ((fps: number, message: string) => void) | undefined) {
+    this._onFpsDegrade = value
+  }
+
+  get onDestroy(): (() => void) | undefined {
+    return this._onDestroy
+  }
+
+  set onDestroy(value: (() => void) | undefined) {
+    this._onDestroy = value
+  }
+
+  /** Clears a previous error stop, resets failure count, and resumes painting. */
+  recover(): void {
+    this._stopped = false
+    this._errorCount = 0
+    this.invalidate()
+    this.updateAnimation()
   }
 
   /** Only ticks while art is enabled, on-home, animations are on, and there is motion. */
@@ -269,6 +370,7 @@ export class ArtRenderable extends Renderable {
     this._stopColorsFor = null
     this._originalColors.clear()
     this._originalFallback = null
+    this._bgRgba = null
     this.safeRequestRender()
   }
 
@@ -327,16 +429,36 @@ export class ArtRenderable extends Renderable {
 
     const effects = pack.kind === "canvas" ? pack.manifest.effects ?? [] : []
     if (effects.length === 0 || !this._animations) return fitted
-    return applyEffects(fitted, effects, this._player.time, { fps: this.effectiveFps(), seed: 0 })
+    return applyEffects(fitted, effects, this._player.time, {
+      fps: this.effectiveFps(),
+      seed: 0,
+      ramp: pack.manifest.ramp,
+    })
+  }
+
+  private applyDim(color: RGBA4): RGBA4 {
+    if (this._dim <= 0 || !this._theme) return color
+    const t = Math.min(0.8, Math.max(0, this._dim / 100))
+    const bg = this._theme.background
+    return [
+      Math.max(0, Math.min(255, Math.round(color[0] + (bg[0] - color[0]) * t))),
+      Math.max(0, Math.min(255, Math.round(color[1] + (bg[1] - color[1]) * t))),
+      Math.max(0, Math.min(255, Math.round(color[2] + (bg[2] - color[2]) * t))),
+      color[3],
+    ]
   }
 
   private stopColors(style: ResolvedStyle): readonly RGBA[] {
     if (this._stopColorsFor === style && this._stopColors) return this._stopColors
     const colors: RGBA[] = []
     for (const stop of style.stops.slice(0, MAX_STYLE_STOPS)) {
-      colors.push(RGBA.fromInts(stop[0], stop[1], stop[2], stop[3]))
+      const dimmed = this.applyDim(stop)
+      colors.push(RGBA.fromInts(dimmed[0], dimmed[1], dimmed[2], dimmed[3]))
     }
-    if (colors.length === 0) colors.push(RGBA.fromInts(255, 255, 255, 255))
+    if (colors.length === 0) {
+      const dimmed = this.applyDim([255, 255, 255, 255])
+      colors.push(RGBA.fromInts(dimmed[0], dimmed[1], dimmed[2], dimmed[3]))
+    }
     this._stopColors = colors
     this._stopColorsFor = style
     return colors
@@ -350,10 +472,9 @@ export class ArtRenderable extends Renderable {
       // A reset in a sidecar or a null scene color means "no foreground":
       // use the theme faint color rather than painting an invisible black.
       if (this._originalFallback) return this._originalFallback
-      const faint = this._theme?.faint
-      this._originalFallback = faint
-        ? RGBA.fromInts(faint[0], faint[1], faint[2], faint[3])
-        : RGBA.fromInts(200, 200, 200, 255)
+      const faint = this._theme?.faint ?? [200, 200, 200, 255]
+      const dimmed = this.applyDim(faint)
+      this._originalFallback = RGBA.fromInts(dimmed[0], dimmed[1], dimmed[2], dimmed[3])
       return this._originalFallback
     }
     const key = (r << 16) | (g << 8) | b
@@ -361,19 +482,26 @@ export class ArtRenderable extends Renderable {
     if (cached) return cached
 
     if (this._originalColors.size >= MAX_ORIGINAL_COLORS) this._originalColors.clear()
-    const [qr, qg, qb, qa] = quantizeForCapability([r, g, b, 255], caps)
-    const color = RGBA.fromInts(qr, qg, qb, qa)
+    let base: RGBA4 = [r, g, b, 255]
+    if (this._style.lightLift && this._theme) {
+      base = contrastAdjust(base, this._theme.base, this._theme.background, 3, 0.25).color
+    }
+    const quantized = quantizeForCapability(base, caps)
+    const dimmed = this.applyDim(quantized)
+    const color = RGBA.fromInts(dimmed[0], dimmed[1], dimmed[2], dimmed[3])
     this._originalColors.set(key, color)
     return color
   }
 
   private backgroundColor(): RGBA {
+    if (this._bgRgba) return this._bgRgba
     // A transparent background is serialized as opaque black by the terminal
     // writer, which erases the host's themed home surface. Paint the theme base.
     const background = this._theme?.background
-    return background
+    this._bgRgba = background
       ? RGBA.fromInts(background[0], background[1], background[2], background[3])
       : RGBA.fromInts(0, 0, 0, 255)
+    return this._bgRgba
   }
 
   private paint(buffer: OptimizedBuffer, grid: Grid): void {
@@ -386,20 +514,42 @@ export class ArtRenderable extends Renderable {
 
     const stops = this.stopColors(style)
     const usesOriginal = style.original && grid.colors !== null
+    const singleStop = !usesOriginal && stops.length === 1 ? stops[0] : null
     const caps = usesOriginal ? this.capabilities() : null
     const background = this.backgroundColor()
+    const hasDrawText = typeof (buffer as { drawText?: unknown }).drawText === "function"
 
     for (let y = area.startY; y < area.endY; y++) {
       const screenY = oy + y
+      let runStart = area.startX
+      let runFg: RGBA | null = null
+      let runText = ""
       for (let x = area.startX; x < area.endX; x++) {
         const index = y * grid.cols + x
         const raw = grid.chars[index] ?? " "
         const char = raw === "" ? " " : raw
         const foreground =
-          usesOriginal && caps && grid.colors
+          singleStop ??
+          (usesOriginal && caps && grid.colors
             ? this.originalColor(grid.colors, index, caps)
-            : stops[stopIndexFor(brightnessAt(grid, ramp, x, y), stops.length)]
-        buffer.setCell(ox + x, screenY, char, foreground, background, 0)
+            : stops[stopIndexFor(brightnessAt(grid, ramp, x, y), stops.length)])
+        if (!hasDrawText) {
+          buffer.setCell(ox + x, screenY, char, foreground, background, 0)
+          continue
+        }
+        if (runFg === foreground) {
+          runText += char
+        } else {
+          if (runFg !== null && runText.length > 0) {
+            buffer.drawText(runText, ox + runStart, screenY, runFg, background, 0)
+          }
+          runStart = x
+          runFg = foreground
+          runText = char
+        }
+      }
+      if (hasDrawText && runFg !== null && runText.length > 0) {
+        buffer.drawText(runText, ox + runStart, screenY, runFg, background, 0)
       }
     }
   }
@@ -479,10 +629,13 @@ export class ArtRenderable extends Renderable {
       }
     }
     this._style = next
+    this._degradedStyle = next
     this._stopColors = null
     this._stopColorsFor = null
     this._displayGrid = null
-    this.notify(this._onDegrade, `art rendering slow; switched to ${next.effective} colors`)
+    const message = `art rendering slow; switched to ${next.effective} colors`
+    this.notifyStyleDegrade(next, message)
+    this.notify(this._onDegrade, message)
   }
 
   /** One-shot safety net: halve the tick rate, never below 5 fps. */
@@ -491,10 +644,33 @@ export class ArtRenderable extends Renderable {
     const next = Math.max(MIN_DEGRADED_FPS, Math.floor(current / 2))
     if (next >= current) return
     const wasActive = this.animationFps !== undefined
+    this._degradedFps = next
     this._fps = next
     this._player.setFps(next)
     if (wasActive && !this.isDestroyed) this.animationFps = next
-    this.notify(this._onDegrade, `art rendering slow; fps reduced to ${next}`)
+    const message = `art rendering slow; fps reduced to ${next}`
+    this.notifyFpsDegrade(next, message)
+    this.notify(this._onDegrade, message)
+  }
+
+  private notifyStyleDegrade(style: ResolvedStyle, message: string): void {
+    const callback = this._onStyleDegrade
+    if (!callback) return
+    try {
+      callback(style, message)
+    } catch {
+      // A failing listener must never break rendering.
+    }
+  }
+
+  private notifyFpsDegrade(fps: number, message: string): void {
+    const callback = this._onFpsDegrade
+    if (!callback) return
+    try {
+      callback(fps, message)
+    } catch {
+      // A failing listener must never break rendering.
+    }
   }
 
   private notify(callback: ((message: string) => void) | undefined, message: string): void {
@@ -564,7 +740,13 @@ export class ArtRenderable extends Renderable {
     this._stopColorsFor = null
     this._originalColors.clear()
     this._originalFallback = null
+    this._bgRgba = null
     this._samples.length = 0
+    try {
+      this._onDestroy?.()
+    } catch {
+      // Unmount cleanup must never throw during teardown.
+    }
     super.destroySelf()
   }
 }

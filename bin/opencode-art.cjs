@@ -10,6 +10,8 @@ if (major < 22 || (major === 22 && minor < 18)) {
   process.exit(2)
 }
 
+require("./strip-ts.cjs")
+
 import("../src/cli/main.ts")
   .then((module) => module.main(process.argv.slice(2)))
   .then((code) => {

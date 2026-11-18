@@ -94,6 +94,7 @@ If the terminal reports no color, the art is still drawn in `mono`. Run
 | `/art set <id>` | Select a pack by id. |
 | `/art style <mono\|theme\|palette\|original>` | Set the color style. |
 | `/art fps <1-30>` | Set playback fps; values are rounded and clamped. |
+| `/art dim <0-80>` | Dim foreground colors toward the theme background (0-80%). |
 | `/art reload` | Re-scan and re-validate all pack folders. |
 | `/art validate [id\|path]` | Validate one pack or every pack. A filesystem path is accepted. |
 | `/art help` | Show commands and the arts paths. |
@@ -147,7 +148,7 @@ Settings apply in this order, highest priority first:
 2. Global settings: OpenCode durable storage, written by `/art`
 3. Pack defaults: `defaultStyle`, `fps`
 4. Plugin defaults: `enabled: true`, `pack: "fool"`, `style: "mono"`,
-   `fps` from the pack
+   `fps` from the pack, `dim: 0`
 
 The `/art` dialog and commands write global settings only. The plugin never
 writes into a repository. A project override is a deliberate hand edit:
@@ -158,7 +159,8 @@ writes into a repository. A project override is a deliberate hand edit:
   "enabled": true,
   "pack": "fool",
   "style": "mono",
-  "fps": 10
+  "fps": 10,
+  "dim": 0
 }
 ```
 
@@ -211,6 +213,8 @@ Every line must be exactly `cols` width-1 printable characters, and every frame
 must have exactly `rows` lines. Tabs, control characters, combining marks, and
 wide characters are rejected. Sidecars are optional but all-or-nothing per
 pack; they add foreground color only and must strip to the matching `.txt`.
+Optional `fit` controls how frames scale into the terminal (`stretch`,
+`contain`, `cover`, or `center`; default `stretch`).
 
 Full rules, caps, effects, and sidecar format: [docs/PACKS.md](docs/PACKS.md).
 JSON Schema: [schemas/art.schema.json](schemas/art.schema.json), also exported
@@ -218,10 +222,11 @@ as `opencode-art/schema`.
 
 ## Watch
 
-Pack folders are polled every 2 seconds with a 500 ms debounce. A change
-reloads the active pack without a restart. If the active pack disappears, the
-last good frames stay on screen and the bundled Fool is the fallback. Polling
-stops when art is disabled.
+The project arts folder, user arts folder, and `<project>/.opencode/art.json`
+are polled every 2 seconds with a 500 ms debounce (bundled frames are not
+polled). A change reloads settings and the active pack without a restart. If
+the active pack disappears, the last good frames stay on screen and the bundled
+Fool is the fallback. Polling stops when art is disabled.
 
 ## Examples
 
@@ -247,7 +252,9 @@ arts directory to try it.
 
 The plugin uses the host's OpenTUI, Solid, and plugin modules. It does not
 bundle them. Do not install newer OpenTUI APIs into the plugin expecting them
-to run on 2.3.2.
+to run on 2.3.2. `bin/opencode-art.cjs` registers a Node TypeScript-stripping
+hook so the authoring CLI works on Node 22.18+ even when installed inside
+`node_modules`.
 
 Details and terminal degradation: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
@@ -259,12 +266,12 @@ Coming from the old `ascii-bg` plugin: [docs/MIGRATION.md](docs/MIGRATION.md).
 |---|---|
 | No art on the home screen | Run `/art on`. Check that your terminal has color or that `mono` is acceptable. |
 | A pack is missing | Confirm `<arts>/<id>/art.json` exists and the folder name matches `id`. Run `/art reload`. |
-| `/art` is missing after an update | The TUI is still the old process. | Quit OpenCode completely and relaunch it. |
+| `/art` is missing after an update | The TUI is still the old process. Quit OpenCode completely and relaunch it. |
 | A pack is listed under Problems | Run `/art validate <id>` or `/art validate <path>` and fix the reported file and line. |
 | Wrong shape or shifted art | Every line must be exactly `cols` characters and every frame exactly `rows` lines. Use width-1 glyphs only. |
 | Art disappeared after an edit | The last good frames are kept while the new pack is invalid. Fix the pack and run `/art reload`. |
 | `/art on` does not work | The project `.opencode/art.json` may set `enabled: false`. Edit the project file. |
-| `original` looks like palette | The terminal has no 256-color support, the pack has no sidecars, or light-theme contrast adjustment rejected the authored colors. |
+| `original` looks like palette | The terminal has no 256-color support, the pack has no sidecars, or more than a quarter of sampled colors failed the light-theme contrast check. |
 | Art is slow | Lower `/art fps` or choose `theme`/`mono`. The renderer also degrades once on its own. |
 
 More fixes: [docs/AUTHORING.md](docs/AUTHORING.md#troubleshooting) and

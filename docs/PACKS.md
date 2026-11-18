@@ -45,6 +45,8 @@ Rules:
   never reads it, and never executes it.
 - All paths in `art.json` are relative to the pack root. Absolute paths, drive
   letters, `..`, and symlinks that resolve outside the root are rejected.
+- Symlinked pack directories in an arts root are followed when they resolve to
+  a directory; paths inside `art.json` still must stay inside the pack root.
 - The pack data cap counts `art.json`, frame or canvas files, and sidecars.
   Other files in the folder are ignored by the loader.
 
@@ -103,12 +105,13 @@ also exported as `opencode-art/schema`.
 | `name` | yes | string | 1-80 printable characters. |
 | `description` | no | string | At most 500 printable characters. |
 | `author` | no | string | At most 80 printable characters. |
-| `license` | no | string | At most 40 characters. Required for packs accepted into this repository. |
+| `license` | no | string | At most 40 printable characters. Required for packs accepted into this repository. |
 | `homepage` | no | string | `https://` URL, at most 200 characters. |
 | `fps` | yes | number | 1-30. Playback rate and effect step rate. |
 | `cols` | yes | integer | 1-400. Every frame line and canvas line must match. |
 | `rows` | yes | integer | 1-200. Frame line count and canvas line count must match. |
 | `defaultStyle` | no | enum | `mono`, `theme`, `palette`, or `original`. Default `mono`. |
+| `fit` | no | enum | `stretch`, `contain`, `cover`, or `center`. Default `stretch`. |
 | `ramp` | no | string | 2-64 unique width-1 glyphs, low to high density. Default ` .:-=+*#%@`. |
 | `palette` | no | string[] | 2-32 `#rrggbb` stops, low to high brightness. |
 | `frames` | one of | string | Pack-relative directory containing the sequence. |
@@ -124,6 +127,14 @@ project `.opencode/art.json` overrides that. A pack with no `palette` falls
 back to `theme` for `palette` style, with the reason shown in the status line
 and toasts. The dialog only offers `palette` for packs that declare a palette.
 
+`fit` controls how frames map into the display box:
+
+- `stretch` (default): nearest-neighbor resample to fill the display box.
+- `contain`: uniform aspect-preserving scale to fit inside the box, centered with
+  space padding.
+- `cover`: uniform aspect-preserving scale to fill the box, center-cropped.
+- `center`: unscaled 1:1 placement centered in the box, padded or center-cropped.
+
 ## Frames and canvas
 
 - Files are UTF-8. A leading BOM is ignored.
@@ -133,7 +144,8 @@ and toasts. The dialog only offers `palette` for packs that declare a palette.
 - Every frame must contain exactly `rows` lines.
 - Trailing spaces are meaningful cells and are preserved.
 - Tabs, control characters, combining marks, zero-width characters, format
-  characters, emoji, and East Asian wide or fullwidth characters are rejected.
+  characters, Private Use Area glyphs, emoji, and East Asian wide or fullwidth
+  characters are rejected.
 - All frames in a pack must have the same dimensions as `cols` x `rows`.
 - A pack has 1-600 frames. A canvas pack counts as one frame.
 - A frame pack loops after `frameCount / fps` seconds. There is no `loop`
@@ -156,7 +168,7 @@ Effects are applied in array order and never change the grid dimensions.
 | `wave` | `intensity`, `speed`, `axis` | Sine displacement of the grid. Amplitude grows with `intensity`, up to 6 cells. |
 | `drift` | `intensity`, `speed`, `axis` | Wrapped scroll. Up to 6 cells per second at full intensity and speed. |
 | `twinkle` | `intensity`, `speed`, `seed` | Sparse cells alternate between their glyph and a space. |
-| `scanline` | `intensity`, `speed`, `axis` | A moving band, about 8 percent of the axis, dims color cells or lowers glyph density. |
+| `scanline` | `intensity`, `speed`, `axis` | A moving band, about 8 percent of the axis, dims color cells or steps glyphs down `ramp` (falling back to the default density ramp). |
 
 Parameter rules:
 
@@ -169,7 +181,8 @@ Parameter rules:
 
 Colors move with their cells for `wave` and `drift`. Effects are deterministic
 for the same pack, time, and fps. Missing parameters use the defaults above. An
-unknown effect type is a validation error.
+unknown effect type is a validation error. Unknown fields on an effect object
+produce a warning and are ignored.
 
 ## Color sidecars
 
@@ -260,7 +273,7 @@ Additional checks:
 | `id "x" does not match the folder name "y"` | The folder was renamed without the manifest. | Rename the folder or fix `id`. |
 | `effects is only valid with canvas` | A frame pack declares effects. | Remove `effects`; motion comes from the frames. |
 | `resolves outside the pack root` | An absolute path, drive letter, `..`, or escaping symlink. | Use a path relative to the pack folder. |
-| `original` falls back to palette or theme | No sidecars, 16-color terminal, or a failed light-theme contrast check. | Provide sidecars, use a 256-color terminal, or accept the fallback. |
+| `original` falls back to palette or theme | No sidecars, 16-color terminal, or more than 25% of sampled colors failed the light-theme contrast check. | Provide sidecars, use a 256-color terminal, adjust colors for contrast, or accept the fallback. |
 
 ## Bundled Fool
 

@@ -88,3 +88,67 @@ test("buildPreview splits runs at color changes instead of painting rows flat", 
   assert.deepEqual(runs[0]?.color, [20, 20, 20, 255])
   assert.deepEqual(runs[1]?.color, [10, 10, 10, 255])
 })
+
+test("buildPreview respects pack fit mode, frameIndex, animations, lightLift, and dim", () => {
+  const pack: Pack = {
+    id: "fx",
+    dir: "fx",
+    kind: "canvas",
+    manifest: {
+      schemaVersion: 1,
+      id: "fx",
+      name: "FX",
+      fps: 10,
+      cols: 2,
+      rows: 2,
+      defaultStyle: "mono",
+      fit: "contain",
+      ramp: " .:-=+*#%@",
+      effects: [{ type: "drift", intensity: 1, speed: 1, axis: "x" }],
+    },
+    frames: [{ cols: 2, rows: 2, chars: "@.@@", colors: null }],
+    warnings: [],
+  }
+  const contained = buildPreview(pack, mono, 6, 2)
+  assert.equal(previewText(contained), "  @.  \n  @@  ")
+
+  const animated = buildPreview(pack, mono, 6, 2, { animations: true, time: 0.5, fps: 10 })
+  assert.notEqual(previewText(animated), previewText(contained))
+
+  const framesPack: Pack = {
+    ...pack,
+    kind: "frames",
+    manifest: { ...pack.manifest, fit: "stretch", effects: [] },
+    frames: [
+      { cols: 2, rows: 2, chars: "aaaa", colors: null },
+      { cols: 2, rows: 2, chars: "bbbb", colors: null },
+    ],
+  }
+  assert.equal(previewText(buildPreview(framesPack, mono, 2, 2, { frameIndex: 1 })), "bb\nbb")
+  assert.equal(previewText(buildPreview(framesPack, mono, 2, 2, { frameIndex: 99 })), "bb\nbb")
+
+  const dimmedMono = buildPreview(framesPack, mono, 2, 2, {
+    dim: 50,
+    background: [0, 0, 0, 255],
+  })
+  assert.deepEqual(dimmedMono[0]?.[0]?.color, [128, 128, 128, 255])
+
+  const originalPack: Pack = {
+    ...framesPack,
+    frames: [{ cols: 1, rows: 1, chars: "#", colors: new Uint8Array([220, 220, 220]) }],
+  }
+  const liftedOriginal: ResolvedStyle = {
+    requested: "original",
+    effective: "original",
+    stops: [],
+    original: true,
+    lightLift: true,
+  }
+  const lifted = buildPreview(originalPack, liftedOriginal, 1, 1, {
+    foreground: [0, 0, 0, 255],
+    background: [255, 255, 255, 255],
+  })
+  const liftedRgb = lifted[0]?.[0]?.color
+  assert.ok(liftedRgb)
+  assert.ok(liftedRgb[0] < 220)
+})

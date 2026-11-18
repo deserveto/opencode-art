@@ -1,6 +1,6 @@
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
-import { PACK_ID_PATTERN } from "../art/types.ts"
+import { PACK_ID_PATTERN, type FitMode } from "../art/types.ts"
 import type { GlyphFrame } from "./pipeline.ts"
 import { nearestIndex, rgbToHex, type Rgb } from "./quantize.ts"
 
@@ -14,6 +14,7 @@ export interface PackWriteOptions {
   readonly cols: number
   readonly rows: number
   readonly ramp: string
+  readonly fit?: FitMode
   readonly kind: "canvas" | "frames"
   readonly frames: readonly GlyphFrame[]
   readonly palette?: readonly Rgb[]
@@ -35,17 +36,17 @@ function sidecar(frame: GlyphFrame, palette: readonly Rgb[]): string {
     for (let x = 0; x < frame.cols; x++) {
       const index = y * frame.cols + x
       const char = characterAt(frame, index)
-      if (char === " ") {
+      const r = frame.colors[index * 3]
+      const g = frame.colors[index * 3 + 1]
+      const b = frame.colors[index * 3 + 2]
+      if (char === " " || (r === 0 && g === 0 && b === 0)) {
         if (active !== -1) {
           line += "\x1b[0m"
           active = -1
         }
-        line += " "
+        line += char
         continue
       }
-      const r = frame.colors[index * 3]
-      const g = frame.colors[index * 3 + 1]
-      const b = frame.colors[index * 3 + 2]
       const key = (r << 16) | (g << 8) | b
       let stop = cache.get(key)
       if (stop === undefined) {
@@ -127,6 +128,7 @@ export async function writePack(options: PackWriteOptions): Promise<string> {
     rows: options.rows,
     defaultStyle: hasColor ? "original" : "mono",
     ramp: options.ramp,
+    ...(options.fit ? { fit: options.fit } : {}),
     ...(options.description ? { description: options.description } : {}),
     ...(options.author ? { author: options.author } : {}),
     ...(options.license ? { license: options.license } : {}),

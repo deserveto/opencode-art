@@ -154,6 +154,25 @@ test("scanline dims glyph density on mono art", () => {
   assert.notEqual(output.chars, PLAIN.chars)
 })
 
+test("scanline steps down along a custom ramp when supplied and falls back for unknown glyphs", () => {
+  const spec: EffectSpec = { type: "scanline", intensity: 1, speed: 1, axis: "x" }
+  const custom = makeGrid(["dddd", "dddd"])
+  const defaultOutput = applyEffects(custom, [spec], 0, META)
+  assert.equal(defaultOutput.chars, custom.chars)
+
+  const customOutput = applyEffects(custom, [spec], 0, { ...META, ramp: "abcd" })
+  assert.equal(customOutput.chars[0], "a")
+  assert.notEqual(customOutput.chars, custom.chars)
+
+  const mixed = makeGrid(["@@@@", "@@@@"])
+  const fallbackOutput = applyEffects(mixed, [spec], 0, { ...META, ramp: "abcd" })
+  assert.notEqual(fallbackOutput.chars[0], "@")
+  assert.ok(" .:-=+*#%@".includes(fallbackOutput.chars[0]))
+
+  const tooShort = applyEffects(custom, [spec], 0, { ...META, ramp: "d" })
+  assert.equal(tooShort.chars, custom.chars)
+})
+
 test("effects compose in array order", () => {
   const effects: readonly EffectSpec[] = [
     { type: "wave", intensity: 0.8, speed: 1, axis: "x" },

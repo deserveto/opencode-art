@@ -1,20 +1,21 @@
 import path from "node:path"
-import { CAPS, PACK_ID_PATTERN, SCHEMA_VERSION, STYLE_NAMES } from "./types.ts"
+import { CAPS, EFFECT_TYPES, FIT_MODES, PACK_ID_PATTERN, SCHEMA_VERSION, STYLE_NAMES } from "./types.ts"
 import type {
   EffectSpec,
   EffectType,
+  FitMode,
   Manifest,
   PackError,
   PackErrorCode,
   PackSource,
   StyleName,
 } from "./types.ts"
-import { EFFECT_TYPES } from "./types.ts"
 import { describeChar, isWidthOne } from "./grid.ts"
 import { readTextFile } from "./fsutil.ts"
 
 const COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/
 const DEFAULT_RAMP = " .:-=+*#%@"
+const FORMATS = /\p{Cf}/u
 
 const KNOWN_FIELDS = new Set([
   "schemaVersion",
@@ -28,6 +29,7 @@ const KNOWN_FIELDS = new Set([
   "cols",
   "rows",
   "defaultStyle",
+  "fit",
   "ramp",
   "palette",
   "frames",
@@ -35,6 +37,8 @@ const KNOWN_FIELDS = new Set([
   "effects",
   "source",
 ])
+
+const KNOWN_EFFECT_FIELDS = new Set(["type", "intensity", "speed", "seed", "axis"])
 
 type Dict = Record<string, unknown>
 
@@ -50,6 +54,7 @@ export function isPrintableText(value: string): boolean {
   for (const char of value) {
     const code = char.codePointAt(0) ?? 0
     if (code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f)) return false
+    if (code === 0x2028 || code === 0x2029 || FORMATS.test(char)) return false
   }
   return true
 }
@@ -70,12 +75,16 @@ function parseEffect(
   value: unknown,
   index: number,
   fail: (code: PackErrorCode, message: string) => void,
+  warnings: string[],
 ): EffectSpec | undefined {
   const field = `effects[${index}]`
   const record = asRecord(value)
   if (record === null) {
     fail("effects", `"${field}": must be an object`)
     return undefined
+  }
+  for (const key of Object.keys(record)) {
+    if (!KNOWN_EFFECT_FIELDS.has(key)) warnings.push(`art.json: unknown field "${field}.${key}" ignored`)
   }
   const rawType = record.type
   const type = typeof rawType === "string" ? EFFECT_TYPES.find((name) => name === rawType) : undefined
@@ -192,7 +201,7 @@ export function parseManifest(
 
   const description = textField("description", record.description, CAPS.descriptionLength, true)
   const author = textField("author", record.author, CAPS.authorLength, true)
-  const license = textField("license", record.license, CAPS.licenseLength, false)
+  const license = textField("license", record.license, CAPS.licenseLength, true)
 
   let homepage: string | undefined
   if (record.homepage !== undefined) {
@@ -236,6 +245,17 @@ export function parseManifest(
       fail("field", `"defaultStyle": must be one of ${STYLE_NAMES.join(", ")}`)
     } else {
       defaultStyle = style
+    }
+  }
+
+  let fit: FitMode | undefined
+  if (record.fit !== undefined) {
+    const rawFit = record.fit
+    const parsedFit = typeof rawFit === "string" ? FIT_MODES.find((mode) => mode === rawFit) : undefined
+    if (parsedFit === undefined) {
+      fail("field", `"fit": must be one of ${FIT_MODES.join(", ")}`)
+    } else {
+      fit = parsedFit
     }
   }
 
@@ -324,7 +344,7 @@ export function parseManifest(
       }
       const specs: EffectSpec[] = []
       for (let index = 0; index < record.effects.length; index++) {
-        const spec = parseEffect(record.effects[index], index, fail)
+        const spec = parseEffect(record.effects[index], index, fail, warnings)
         if (spec !== undefined) specs.push(spec)
       }
       effects = specs
@@ -356,6 +376,7 @@ export function parseManifest(
       cols,
       rows,
       defaultStyle,
+      ...(fit !== undefined ? { fit } : {}),
       ramp,
       palette,
       frames,

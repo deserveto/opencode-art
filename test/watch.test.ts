@@ -81,3 +81,43 @@ test("missing roots are handled as a signature, not a throw", async () => {
   const signature = await scanSignature([path.join(tmpdir(), "opencode-art-does-not-exist")])
   assert.match(signature, /missing/)
 })
+
+test("signature tracks file roots directly", async () => {
+  const root = await tempRoot()
+  try {
+    const configFile = path.join(root, "art.json")
+    await writeFile(configFile, '{"pack":"alpha"}\n')
+    const first = await scanSignature([configFile])
+    assert.doesNotMatch(first, /:missing$/)
+    assert.ok(first.startsWith(`${configFile}:`))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await writeFile(configFile, '{"pack":"beta-pack"}\n')
+    const second = await scanSignature([configFile])
+    assert.notEqual(first, second)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test("signature scans multi-directory trees concurrently and reflects edits", async () => {
+  const root = await tempRoot()
+  try {
+    await Promise.all([
+      mkdir(path.join(root, "pack-a", "frames"), { recursive: true }),
+      mkdir(path.join(root, "pack-b", "frames"), { recursive: true }),
+    ])
+    await Promise.all([
+      writeFile(path.join(root, "pack-a", "art.json"), "{}"),
+      writeFile(path.join(root, "pack-a", "frames", "000.txt"), "a\n"),
+      writeFile(path.join(root, "pack-b", "art.json"), "{}"),
+      writeFile(path.join(root, "pack-b", "frames", "000.txt"), "b\n"),
+    ])
+    const first = await scanSignature([root])
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await writeFile(path.join(root, "pack-b", "frames", "000.txt"), "bb\n")
+    const second = await scanSignature([root])
+    assert.notEqual(first, second)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

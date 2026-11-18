@@ -36,6 +36,7 @@ export function artHelp(state: ArtState): string {
     "/art set <id>        select a pack",
     "/art style <mono|theme|palette|original>",
     "/art fps <1-30>",
+    "/art dim <0-80>",
     "/art reload          re-scan packs",
     "/art validate [id|path]",
     "/art help",
@@ -112,6 +113,15 @@ export async function runArtCommand(context: Context, state: ArtState, input?: s
         return
       }
       await state.setFps(value)
+      return
+    }
+    case "dim": {
+      const value = Number(command.value)
+      if (!command.value || !Number.isFinite(value)) {
+        toast("Usage: /art dim <0-80>", "warning")
+        return
+      }
+      await state.setDim(value)
       return
     }
     case "reload": {

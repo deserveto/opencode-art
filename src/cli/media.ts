@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises"
+import { readFile, stat } from "node:fs/promises"
 import { decode as decodeJpeg } from "jpeg-js"
 import { decode as decodePng } from "fast-png"
 import { decompressFrames, parseGIF } from "gifuct-js"
@@ -20,6 +20,15 @@ export interface AnimatedFrames {
 
 const MAX_PIXELS = 64_000_000
 const MAX_ANIMATED_PIXELS = 256_000_000
+const MAX_FILE_BYTES = 128 * 1024 * 1024
+
+async function readMediaFile(file: string): Promise<Buffer> {
+  const info = await stat(file)
+  if (info.size > MAX_FILE_BYTES) {
+    throw new Error(`${file} is ${info.size} bytes; the media file cap is 128 MB`)
+  }
+  return readFile(file)
+}
 
 function checkDimensions(width: number, height: number, label: string): void {
   if (!(width > 0) || !(height > 0)) throw new Error(`${label} has no pixels`)
@@ -87,8 +96,14 @@ export function extensionOf(file: string): string {
 }
 
 export async function decodeStill(file: string): Promise<RgbaImage> {
-  const buffer = await readFile(file)
   const extension = extensionOf(file)
+  if (extension === "gif") {
+    const animated = await decodeAnimation(file)
+    const first = animated.frames[0]
+    if (!first) throw new Error(`${file}: GIF has no frames`)
+    return first
+  }
+  const buffer = await readMediaFile(file)
   if (extension === "png") {
     const decoded = decodePng(buffer)
     checkDimensions(decoded.width, decoded.height, file)
@@ -122,7 +137,7 @@ export async function decodeStill(file: string): Promise<RgbaImage> {
 }
 
 export async function decodeAnimation(file: string): Promise<AnimatedFrames> {
-  const buffer = await readFile(file)
+  const buffer = await readMediaFile(file)
   const arrayBuffer = new Uint8Array(buffer).buffer
   const gif = parseGIF(arrayBuffer)
   const width = gif.lsd.width

@@ -45,6 +45,8 @@ export function loadCanvas(text: string, cols: number, rows: number): SceneGrid 
   return { chars: lines }
 }
 
+const wrap = (v: number, n: number): number => (n <= 0 ? 0 : ((v % n) + n) % n)
+
 function size(grid: SceneGrid): { cols: number; rows: number } {
   const rows = grid.chars.length
   const cols = grid.chars[0]?.length ?? 0
@@ -72,8 +74,8 @@ export function wave(grid: SceneGrid, time: number, options: { axis?: "x" | "y";
     for (let x = 0; x < cols; x++) {
       const phase = axis === "x" ? y : x
       const offset = Math.round(Math.sin(time * speed * Math.PI * 2 + phase * 0.25) * amplitude)
-      const fromX = axis === "x" ? (x - offset + cols) % cols : x
-      const fromY = axis === "y" ? (y - offset + rows) % rows : y
+      const fromX = axis === "x" ? wrap(x - offset, cols) : x
+      const fromY = axis === "y" ? wrap(y - offset, rows) : y
       const char = grid.chars[fromY]?.[fromX] ?? " "
       result.chars[y] = `${result.chars[y].slice(0, x)}${char}${result.chars[y].slice(x + 1)}`
       if (grid.colors && result.colors) result.colors[y][x] = grid.colors[fromY]?.[fromX] ?? null
@@ -115,8 +117,8 @@ export function drift(grid: SceneGrid, time: number, options: { axis?: "x" | "y"
     let line = ""
     const colors: Array<string | null> = []
     for (let x = 0; x < cols; x++) {
-      const fromX = axis === "x" ? (x - shift + cols * 100) % cols : x
-      const fromY = axis === "y" ? (y - shift + rows * 100) % rows : y
+      const fromX = axis === "x" ? wrap(x - shift, cols) : x
+      const fromY = axis === "y" ? wrap(y - shift, rows) : y
       line += grid.chars[fromY][fromX]
       if (grid.colors) colors.push(grid.colors[fromY][fromX])
     }

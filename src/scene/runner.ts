@@ -99,8 +99,8 @@ function validateChars(value: unknown[], cols: number, rows: number): string[] {
 }
 
 async function main(): Promise<void> {
-  const [scenePath, outPath, fpsArg, colsArg, rowsArg, loopArg, paletteArg] = process.argv.slice(2)
-  if (!scenePath || !outPath) fail("runner usage: runner.ts <scene> <out.json> [fps cols rows loop palette]")
+  const [scenePath, outPath, fpsArg, colsArg, rowsArg, loopArg, paletteArg, seedArg] = process.argv.slice(2)
+  if (!scenePath || !outPath) fail("runner usage: runner.ts <scene> <out.json> [fps cols rows loop palette seed]")
 
   const module = (await import(pathToFileURL(scenePath).href)) as Record<string, unknown>
   const rawMeta = asRecord(module.meta)
@@ -125,6 +125,10 @@ async function main(): Promise<void> {
     .split(",")
     .map((stop) => stop.trim())
     .filter(Boolean)
+  const rawSeed =
+    optionalNumber(seedArg) ?? (typeof rawMeta.seed === "number" && Number.isSafeInteger(rawMeta.seed) ? rawMeta.seed : 0)
+  const clampedSeed = Math.max(Number.MIN_SAFE_INTEGER, Math.min(Number.MAX_SAFE_INTEGER, Math.trunc(rawSeed)))
+  const seed = clampedSeed === 0 ? 0 : clampedSeed
   const frames: SceneResult[] = []
   for (let frame = 0; frame < total; frame++) {
     const context = {
@@ -133,7 +137,7 @@ async function main(): Promise<void> {
       frame,
       fps: meta.fps,
       palette,
-      seed: 0,
+      seed,
       helpers,
     }
     const result = await (scene as (t: number, ctx: unknown) => unknown)(frame / meta.fps, context)

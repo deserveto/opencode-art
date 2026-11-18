@@ -53,6 +53,7 @@ export function parseSettings(raw: unknown): ParsedSettings {
     pack?: string
     style?: StyleName
     fps?: number
+    dim?: number
   } = { version: SETTINGS_VERSION }
 
   if (raw.enabled !== undefined) {
@@ -71,6 +72,11 @@ export function parseSettings(raw: unknown): ParsedSettings {
     if (typeof raw.fps === "number" && Number.isInteger(raw.fps) && raw.fps >= 1 && raw.fps <= 30) {
       settings.fps = raw.fps
     } else warnings.push("fps must be an integer from 1 to 30")
+  }
+  if (raw.dim !== undefined) {
+    if (typeof raw.dim === "number" && Number.isInteger(raw.dim) && raw.dim >= 0 && raw.dim <= 80) {
+      settings.dim = raw.dim
+    } else warnings.push("dim must be an integer from 0 to 80")
   }
 
   return { settings, warnings }
@@ -93,11 +99,13 @@ export async function readProjectSettings(file: string): Promise<ParsedSettings>
 }
 
 export function mergeLayers(project: Settings, global: Settings): EffectiveSettings {
+  const dim = project.dim ?? global.dim
   return {
     enabled: project.enabled ?? global.enabled ?? PLUGIN_DEFAULTS.enabled,
     pack: project.pack ?? global.pack ?? PLUGIN_DEFAULTS.pack,
     style: project.style ?? global.style ?? null,
     fps: project.fps ?? global.fps ?? null,
+    ...(dim !== undefined ? { dim } : {}),
   }
 }
 
@@ -152,6 +160,7 @@ export function createSettingsStore(host: SettingsHost, initialProject: Settings
 
   return {
     effective,
+    project: () => project,
     projectPath: host.projectPath,
     async reload() {
       const parsed = await readProjectSettings(host.projectPath)
@@ -189,6 +198,14 @@ export function createSettingsStore(host: SettingsHost, initialProject: Settings
         draft.fps = fps
       })
       if (ok) clearPending("fps", fps)
+    },
+    async setDim(dim) {
+      pending = { ...pending, dim }
+      const ok = await write((draft) => {
+        draft.version = SETTINGS_VERSION
+        draft.dim = dim
+      })
+      if (ok) clearPending("dim", dim)
     },
   }
 }

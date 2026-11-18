@@ -1,6 +1,7 @@
 export {
   CAPS,
   EFFECT_TYPES,
+  FIT_MODES,
   PACK_ID_PATTERN,
   SCHEMA_VERSION,
   STYLE_NAMES,
@@ -9,6 +10,7 @@ export type {
   Cell,
   EffectSpec,
   EffectType,
+  FitMode,
   Frame,
   Grid,
   Manifest,

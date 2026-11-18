@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises"
+import { readdir, stat } from "node:fs/promises"
 import type { Dirent } from "node:fs"
 import path from "node:path"
 import { CAPS } from "./types.ts"
@@ -83,8 +83,10 @@ async function scanScope(root: string, scope: Scope): Promise<ScopeScan> {
   const candidates: PackCandidate[] = []
   const problems: PackProblem[] = []
   for (const entry of [...entries].sort((a, b) => compareNames(a.name, b.name))) {
-    if (!entry.isDirectory()) continue
     const dir = path.join(root, entry.name)
+    if (!entry.isDirectory()) {
+      if (!entry.isSymbolicLink() || !(await stat(dir).catch(() => null))?.isDirectory()) continue
+    }
     if (!(await pathExists(path.join(dir, "art.json")))) continue
     const read = await readManifest(dir, entry.name)
     if (read.errors.length > 0 || read.manifest === undefined) {

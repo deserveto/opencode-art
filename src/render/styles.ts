@@ -63,16 +63,21 @@ function isLightTheme(theme: ThemeColors): boolean {
  * toward the theme foreground by at most 25% reaches 3:1. Too many hard
  * failures mean the art was authored for a dark background.
  */
-function passesLightContrast(pack: Pack, theme: ThemeColors): boolean {
+function passesLightContrast(pack: Pack, theme: ThemeColors): { ok: boolean; needsLift: boolean } {
   const colors = sidecarColors(pack)
-  if (colors.length === 0) return true
+  if (colors.length === 0) return { ok: true, needsLift: false }
   let failed = 0
+  let needsLift = false
   for (const color of colors) {
     if (contrastRatio(color, theme.background) >= LIGHT_CONTRAST_FLOOR) continue
     const adjusted = contrastAdjust(color, theme.base, theme.background, LIGHT_LIFT_TARGET, LIGHT_MAX_LIFT)
-    if (!adjusted.reached) failed++
+    if (adjusted.reached) {
+      needsLift = true
+    } else {
+      failed++
+    }
   }
-  return failed / colors.length <= LIGHT_MAX_FAIL_SHARE
+  return { ok: failed / colors.length <= LIGHT_MAX_FAIL_SHARE, needsLift }
 }
 
 function fallbackStops(pack: Pack, capabilities: Capabilities, theme: ThemeColors): {
@@ -157,8 +162,18 @@ export function resolveStyle(
   if (!capabilities.rgb && !capabilities.ansi256) {
     return degraded(requested, "terminal supports 16 colors", pack, capabilities, theme)
   }
-  if (isLightTheme(theme) && !passesLightContrast(pack, theme)) {
-    return degraded(requested, "colors adjusted for light theme", pack, capabilities, theme)
+  if (isLightTheme(theme)) {
+    const check = passesLightContrast(pack, theme)
+    if (!check.ok) {
+      return degraded(requested, "colors adjusted for light theme", pack, capabilities, theme)
+    }
+    return {
+      requested,
+      effective: "original",
+      stops: [],
+      original: true,
+      ...(check.needsLift ? { lightLift: true } : {}),
+    }
   }
   return { requested, effective: "original", stops: [], original: true }
 }

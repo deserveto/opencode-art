@@ -3,7 +3,7 @@ import { Plugin } from "@opencode/plugin/tui"
 import { effect, extend } from "@opentui/solid"
 import { Show } from "solid-js"
 import { runArtCommand } from "./src/commands/run.tsx"
-import { ArtRenderable } from "./src/render/index.ts"
+import { ArtRenderable, type RGBA4, type ThemeColors } from "./src/render/index.ts"
 import { themeColors } from "./src/plugin/host.ts"
 import { createArtState, type ArtState } from "./src/plugin/state.ts"
 
@@ -13,6 +13,20 @@ extend({ "art-background": ArtRenderable })
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function sameRgba4(a: RGBA4, b: RGBA4): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3]
+}
+
+function sameTheme(a: ThemeColors | undefined, b: ThemeColors): boolean {
+  if (!a) return false
+  return (
+    sameRgba4(a.faint, b.faint) &&
+    sameRgba4(a.muted, b.muted) &&
+    sameRgba4(a.base, b.base) &&
+    sameRgba4(a.background, b.background)
+  )
 }
 
 /**
@@ -26,15 +40,30 @@ export function ArtLayer(props: { readonly context: Context; readonly state: Art
   effect(() => {
     void props.context.themeMode
     void props.context.theme.text.base
-    props.state.refreshTheme()
+    try {
+      props.state.refreshTheme()
+    } catch {
+      // Ignore theme refresh errors during teardown.
+    }
   })
 
   function bind(el: ArtRenderable): void {
+    if (el.isDestroyed) return
     el.pack = props.state.pack()
     el.resolvedStyle = props.state.style() ?? undefined
     el.fps = props.state.fps()
+    el.dim = props.state.dim()
     el.enabled = props.state.enabled()
-    el.theme = themeColors(props.context.theme)
+    const nextTheme = themeColors(props.context.theme)
+    if (!sameTheme(el.theme, nextTheme)) el.theme = nextTheme
+  }
+
+  function showToast(text: string, variant: "warning" | "error"): void {
+    try {
+      props.context.ui.toast.show({ message: text, variant })
+    } catch {
+      // Toast failure during teardown must not crash the render loop.
+    }
   }
 
   let off: (() => void) | null = null
@@ -45,15 +74,27 @@ export function ArtLayer(props: { readonly context: Context; readonly state: Art
           bind(el)
           off?.()
           off = props.state.subscribe(() => bind(el))
+          el.onDestroy = () => {
+            off?.()
+            off = null
+          }
         }}
         pack={props.state.pack()}
         resolvedStyle={props.state.style() ?? undefined}
         fps={props.state.fps()}
+        dim={props.state.dim()}
         enabled={props.state.enabled()}
         animations={props.state.animations}
         theme={themeColors(props.context.theme)}
-        onError={(text) => props.context.ui.toast.show({ message: text, variant: "error" })}
-        onDegrade={(text) => props.context.ui.toast.show({ message: text, variant: "warning" })}
+        onError={(text) => showToast(text, "error")}
+        onStyleDegrade={(next, text) => {
+          props.state.degradeStyle(next)
+          showToast(text, "warning")
+        }}
+        onFpsDegrade={(nextFps, text) => {
+          props.state.degradeFps(nextFps)
+          showToast(text, "warning")
+        }}
       />
     </box>
   )
@@ -106,8 +147,11 @@ export default Plugin.define({
       })
 
       return () => {
-        remove()
-        state.dispose()
+        try {
+          remove()
+        } finally {
+          state.dispose()
+        }
       }
     } catch (error) {
       state.dispose()

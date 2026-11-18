@@ -16,10 +16,12 @@ test("toggles and actions parse case-insensitively", () => {
   assert.deepEqual(parseArtCommand("help"), { kind: "help" })
 })
 
-test("arguments are captured for set, style, fps, validate", () => {
+test("arguments are captured for set, style, fps, dim, validate", () => {
   assert.deepEqual(parseArtCommand("set rainy-city"), { kind: "set", id: "rainy-city" })
   assert.deepEqual(parseArtCommand("style ORIGINAL"), { kind: "style", style: "original" })
   assert.deepEqual(parseArtCommand("fps 12"), { kind: "fps", value: "12" })
+  assert.deepEqual(parseArtCommand("dim 40"), { kind: "dim", value: "40" })
+  assert.deepEqual(parseArtCommand("DIM 0"), { kind: "dim", value: "0" })
   assert.deepEqual(parseArtCommand("validate ./examples/logo"), { kind: "validate", target: "./examples/logo" })
   assert.deepEqual(parseArtCommand("validate"), { kind: "validate", target: undefined })
 })
@@ -28,6 +30,7 @@ test("missing arguments stay undefined so the caller can show usage", () => {
   assert.deepEqual(parseArtCommand("set"), { kind: "set", id: undefined })
   assert.deepEqual(parseArtCommand("style"), { kind: "style", style: undefined })
   assert.deepEqual(parseArtCommand("fps"), { kind: "fps", value: undefined })
+  assert.deepEqual(parseArtCommand("dim"), { kind: "dim", value: undefined })
 })
 
 test("unknown subcommands are reported, not guessed", () => {

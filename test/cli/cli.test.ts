@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -337,5 +337,216 @@ test("video input reports a missing ffmpeg as a user error", async () => {
     assert.match(result.stderr, /ffmpeg was not found/)
   } finally {
     await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("CLI runs from inside a node_modules/opencode-art directory", async () => {
+  const workspace = await temp()
+  const pkgDir = path.join(workspace, "node_modules", "opencode-art")
+  try {
+    await mkdir(pkgDir, { recursive: true })
+    await cp(path.join(root, "bin"), path.join(pkgDir, "bin"), { recursive: true })
+    await cp(path.join(root, "src"), path.join(pkgDir, "src"), { recursive: true })
+    await cp(path.join(root, "package.json"), path.join(pkgDir, "package.json"))
+    await symlink(
+      path.join(root, "node_modules"),
+      path.join(pkgDir, "node_modules"),
+      process.platform === "win32" ? "junction" : "dir",
+    )
+
+    const nmBin = path.join(pkgDir, "bin", "opencode-art.cjs")
+    const runNm = (args: readonly string[]): RunResult => {
+      const result = spawnSync(process.execPath, [nmBin, ...args], {
+        cwd: workspace,
+        encoding: "utf8",
+        timeout: 180_000,
+      })
+      return { code: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" }
+    }
+
+    const packDir = path.join(workspace, "nm-pack")
+    const initRes = runNm(["init", packDir])
+    assert.equal(initRes.code, 0, initRes.stderr)
+    const valRes = runNm(["validate", packDir])
+    assert.equal(valRes.code, 0, valRes.stderr)
+
+    const sceneFile = path.join(workspace, "scene.mjs")
+    await writeFile(sceneFile, SCENE)
+    const bakedDir = path.join(workspace, "nm-baked")
+    const bakeRes = runNm(["bake", sceneFile, "--out", bakedDir])
+    assert.equal(bakeRes.code, 0, bakeRes.stderr)
+    assert.equal(runNm(["validate", bakedDir]).code, 0)
+  } finally {
+    await rm(path.join(pkgDir, "node_modules"), { recursive: true, force: true }).catch(() => {})
+    await rm(workspace, { recursive: true, force: true })
+  }
+})
+
+test("bake --seed passes ctx.seed to scene and falls back to meta.seed", async () => {
+  const dir = await temp()
+  try {
+    const scene = path.join(dir, "seed-scene.mjs")
+    await writeFile(
+      scene,
+      `export const meta = { fps: 2, cols: 16, rows: 2, loop: 0.5, seed: 99 }
+export function scene(_t, ctx) {
+  const label = ("seed:" + ctx.seed).padEnd(ctx.cols).slice(0, ctx.cols)
+  return [label, ".".repeat(ctx.cols)]
+}
+`,
+    )
+
+    const out1 = path.join(dir, "out-pos")
+    const r1 = run(["bake", scene, "--out", out1, "--seed", "1337"])
+    assert.equal(r1.code, 0, r1.stderr)
+    assert.match(await readFile(path.join(out1, "frames", "000.txt"), "utf8"), /^seed:1337/)
+
+    const out2 = path.join(dir, "out-neg")
+    const r2 = run(["bake", scene, "--out", out2, "--seed", "-42"])
+    assert.equal(r2.code, 0, r2.stderr)
+    assert.match(await readFile(path.join(out2, "frames", "000.txt"), "utf8"), /^seed:-42/)
+
+    const out3 = path.join(dir, "out-meta")
+    const r3 = run(["bake", scene, "--out", out3])
+    assert.equal(r3.code, 0, r3.stderr)
+    assert.match(await readFile(path.join(out3, "frames", "000.txt"), "utf8"), /^seed:99/)
+
+    assert.equal(run(["bake", scene, "--out", path.join(dir, "out-bad"), "--seed", "abc"]).code, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("bake --fit writes fit mode to art.json and validates values", async () => {
+  const dir = await temp()
+  try {
+    const input = path.join(dir, "a.png")
+    await writeFile(input, encodePng({ width: 8, height: 4, data: rgba(8, 4) }))
+
+    const outContain = path.join(dir, "fit-contain")
+    const res = run(["bake", input, "--out", outContain, "--cols", "8", "--rows", "4", "--fit", "contain"])
+    assert.equal(res.code, 0, res.stderr)
+    assert.equal(run(["validate", outContain]).code, 0)
+    const manifest = JSON.parse(await readFile(path.join(outContain, "art.json"), "utf8")) as { fit?: string }
+    assert.equal(manifest.fit, "contain")
+
+    const outDefault = path.join(dir, "fit-default")
+    assert.equal(run(["bake", input, "--out", outDefault, "--cols", "8", "--rows", "4"]).code, 0)
+    const defaultManifest = JSON.parse(await readFile(path.join(outDefault, "art.json"), "utf8")) as Record<string, unknown>
+    assert.equal("fit" in defaultManifest, false)
+
+    const bad = run(["bake", input, "--out", path.join(dir, "fit-bad"), "--cols", "8", "--rows", "4", "--fit", "bogus"])
+    assert.equal(bad.code, 1)
+    assert.match(bad.stderr, /--fit must be one of/)
+
+    const centerScene = path.join(dir, "center.mjs")
+    await writeFile(
+      centerScene,
+      `export const meta = { fps: 2, cols: 4, rows: 4, loop: 0.5 }
+export function scene() { return ["####", "####", "####", "####"] }
+`,
+    )
+    const outCenter = path.join(dir, "fit-center")
+    assert.equal(run(["bake", centerScene, "--out", outCenter, "--fit", "center"]).code, 0)
+    const previewCenter = run(["preview", outCenter, "--width", "10"])
+    assert.equal(previewCenter.code, 0, previewCenter.stderr)
+    const centerLines = previewCenter.stdout.replace(/\r?\n$/, "").split(/\r?\n/)
+    assert.equal(centerLines.length, 10)
+    assert.equal(centerLines[0], "          ")
+    assert.equal(centerLines[3], "   ####   ")
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("scene null colors emit ANSI resets instead of palette colors while preserving #000000", async () => {
+  const dir = await temp()
+  try {
+    const sceneExplicit = path.join(dir, "explicit.mjs")
+    await writeFile(
+      sceneExplicit,
+      `export const meta = { fps: 2, cols: 4, rows: 1, loop: 0.5 }
+export function scene() {
+  return {
+    chars: ["#.#."],
+    colors: [["#ff0000", null, "#000000", null]],
+  }
+}
+`,
+    )
+    const outExplicit = path.join(dir, "out-explicit")
+    const r1 = run(["bake", sceneExplicit, "--out", outExplicit, "--palette", "#ff0000,#000000"])
+    assert.equal(r1.code, 0, r1.stderr)
+    assert.equal(run(["validate", outExplicit]).code, 0)
+    const ansExplicit = await readFile(path.join(outExplicit, "frames", "000.ans"), "utf8")
+    assert.equal(ansExplicit, "\x1b[38;2;255;0;0m#\x1b[0m.\x1b[38;2;0;0;0m#\x1b[0m.")
+
+    const sceneAuto = path.join(dir, "auto.mjs")
+    await writeFile(
+      sceneAuto,
+      `export const meta = { fps: 2, cols: 3, rows: 1, loop: 0.5 }
+export function scene() {
+  return {
+    chars: ["A#B"],
+    colors: [[null, "#ff0000", "#000000"]],
+  }
+}
+`,
+    )
+    const outAuto = path.join(dir, "out-auto")
+    const r2 = run(["bake", sceneAuto, "--out", outAuto])
+    assert.equal(r2.code, 0, r2.stderr)
+    assert.equal(run(["validate", outAuto]).code, 0)
+    const ansAuto = await readFile(path.join(outAuto, "frames", "000.ans"), "utf8")
+    assert.ok(ansAuto.startsWith("A\x1b[38;2;"), `expected uncolored leading glyph, got ${JSON.stringify(ansAuto)}`)
+    assert.ok(!ansAuto.includes("\x1b[0mB"), `expected #000000 cell to stay colored, got ${JSON.stringify(ansAuto)}`)
+    assert.equal(ansAuto.replace(/\x1b\[[0-9;]*m/g, ""), "A#B")
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("preview --animate --loops 1 plays all frames and rejects invalid --loops", async () => {
+  const dir = await temp()
+  try {
+    const scene = path.join(dir, "anim.mjs")
+    await writeFile(
+      scene,
+      `export const meta = { fps: 10, cols: 6, rows: 2, loop: 0.3 }
+export function scene(_t, ctx) {
+  const tag = ("F" + ctx.frame).padEnd(ctx.cols, ".")
+  return [tag, "......"]
+}
+`,
+    )
+    const out = path.join(dir, "anim-pack")
+    assert.equal(run(["bake", scene, "--out", out]).code, 0)
+
+    const preview = run(["preview", out, "--animate", "--loops", "1", "--width", "6"])
+    assert.equal(preview.code, 0, preview.stderr)
+    assert.match(preview.stdout, /F0/)
+    assert.match(preview.stdout, /F1/)
+    assert.match(preview.stdout, /F2/)
+
+    assert.equal(run(["preview", out, "--animate", "--loops", "0"]).code, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("CLI supports -h help alias and -- end-of-flags marker", async () => {
+  const dir = path.join(await temp(), "dash-pack")
+  try {
+    const help = run(["-h"])
+    assert.equal(help.code, 0, help.stderr)
+    assert.match(help.stdout, /--seed/)
+    assert.match(help.stdout, /--fit/)
+    assert.match(help.stdout, /--animate/)
+
+    await starter(dir)
+    const val = run(["validate", "--", dir])
+    assert.equal(val.code, 0, val.stderr)
+  } finally {
+    await rm(path.dirname(dir), { recursive: true, force: true })
   }
 })

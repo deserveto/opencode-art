@@ -14,18 +14,38 @@ const MAX_ENTRIES = 4000
 // point `frames` at a directory nested several levels deep.
 const MAX_DEPTH = 5
 
-async function scanDir(dir: string, depth: number, parts: string[]): Promise<void> {
+async function scanDir(dir: string, depth: number, parts: string[]): Promise<boolean> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
-  for (const entry of entries) {
-    if (parts.length > MAX_ENTRIES) {
-      parts.push("truncated")
-      return
-    }
-    const full = path.join(dir, entry.name)
-    const info = await stat(full).catch(() => null)
-    parts.push(`${full}:${info?.size ?? 0}:${info?.mtimeMs ?? 0}`)
-    if (entry.isDirectory() && depth > 0) await scanDir(full, depth - 1, parts)
+  if (entries.length === 0) return false
+  const remaining = MAX_ENTRIES + 1 - parts.length
+  if (remaining <= 0) {
+    parts.push("truncated")
+    return true
   }
+  const truncated = entries.length > remaining
+  const batch = truncated ? entries.slice(0, remaining) : entries
+  const resolved = await Promise.all(
+    batch.map(async (entry) => {
+      const full = path.join(dir, entry.name)
+      const info = await stat(full).catch(() => null)
+      return { entry, full, info }
+    }),
+  )
+  const subdirs: string[] = []
+  for (const { entry, full, info } of resolved) {
+    parts.push(`${full}:${info?.size ?? 0}:${info?.mtimeMs ?? 0}`)
+    if (depth > 0 && (entry.isDirectory() || (entry.isSymbolicLink() && info?.isDirectory()))) {
+      subdirs.push(full)
+    }
+  }
+  if (truncated) {
+    parts.push("truncated")
+    return true
+  }
+  for (const sub of subdirs) {
+    if (await scanDir(sub, depth - 1, parts)) return true
+  }
+  return false
 }
 
 /**
@@ -37,6 +57,10 @@ export async function scanSignature(roots: readonly string[]): Promise<string> {
   const parts: string[] = []
   for (const root of roots) {
     const rootInfo = await stat(root).catch(() => null)
+    if (rootInfo?.isFile()) {
+      parts.push(`${root}:${rootInfo.size}:${rootInfo.mtimeMs}`)
+      continue
+    }
     if (!rootInfo?.isDirectory()) {
       parts.push(`${root}:missing`)
       continue

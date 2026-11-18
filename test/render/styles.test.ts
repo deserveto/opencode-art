@@ -125,12 +125,22 @@ test("light theme keeps dark authored colors", () => {
   const pack = makePack({ palette: PALETTE, frames: [makeGrid(["##", "@@"], [20, 20, 20])] })
   const style = resolveStyle("original", pack, RGB_CAPS, LIGHT_THEME)
   assert.equal(style.effective, "original")
+  assert.equal(style.lightLift, undefined)
+  assert.equal("lightLift" in style, false)
 })
 
 test("light theme accepts a slight lift within 25 percent", () => {
   const pack = makePack({ palette: PALETTE, frames: [makeGrid(["..", ".."], [180, 180, 180])] })
   const style = resolveStyle("original", pack, RGB_CAPS, LIGHT_THEME)
   assert.equal(style.effective, "original")
+  assert.equal(style.lightLift, true)
+})
+
+test("dark theme never sets lightLift on original style", () => {
+  const pack = makePack({ palette: PALETTE, frames: [makeGrid(["..", ".."], [180, 180, 180])] })
+  const style = resolveStyle("original", pack, RGB_CAPS, DARK_THEME)
+  assert.equal(style.effective, "original")
+  assert.equal("lightLift" in style, false)
 })
 
 test("light theme falls back when authored colors cannot reach contrast", () => {

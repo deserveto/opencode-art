@@ -17,6 +17,11 @@ optional peer dependencies for package managers that want the hint.
 OpenTUI 0.9.x is not the compatibility target. Do not use 0.9-only APIs in this
 plugin while it targets OpenCode 2.3.2.
 
+For the authoring CLI, `bin/opencode-art.cjs` registers a Node
+TypeScript-stripping hook ([strip-ts.cjs](../bin/strip-ts.cjs)) so the
+TypeScript sources work on Node 22.18+ even when installed inside
+`node_modules`.
+
 ## Placement
 
 Art is an absolute custom renderable at the `app` slot with `zIndex -1`. It
@@ -26,8 +31,12 @@ fills the terminal from the top-left corner and paints behind host content.
 - Any other route clears the frame and stops the animation clock.
 - Starting directly in a session draws nothing.
 - Returning home redraws immediately.
-- Resizing fits the frame again to the new terminal size. Frames are resampled
-  with nearest-neighbor; characters and colors use the same mapping.
+- Resizing fits the frame again to the new terminal size using the pack's `fit`
+  mode (`stretch`, `contain`, `cover`, or `center`; default `stretch`). `stretch`
+  resamples edge to edge with nearest-neighbor; `contain` scales uniformly with
+  space padding; `cover` scales uniformly and center-crops; `center` places
+  unscaled 1:1 cells centered in the box. Characters and colors use the same
+  mapping.
 
 The renderable only keeps the animation clock alive while art is enabled, the
 route is home, animations are on, and the pack actually moves. A static canvas
@@ -63,6 +72,9 @@ kept but quantized. On 16-color terminals it falls back to `palette` (or
 `theme` when the pack has no palette). A cell with no foreground color uses the
 theme faint color; pure black is treated the same way.
 
+The `dim` setting (`0-80`, default `0`) blends foreground colors toward the theme
+background by that percentage.
+
 ## Style resolution
 
 | Style | Requires | Result |
@@ -92,12 +104,14 @@ and does not change with the theme.
 `original` colors are authored against a background. On a light theme the
 resolver samples the sidecar colors and checks them against the theme
 background. A color passes if it already has 2.2:1 contrast, or if blending it
-at most 25 percent toward the theme foreground reaches 3:1. If more than a
-quarter of the sampled colors fail, the pack uses `palette` (or `theme` when it
-has no palette). The dialog labels the adjustment instead of hiding it.
+at most 25 percent toward the theme foreground reaches 3:1.
 
-There is no per-cell color blending in the current implementation. It is pass
-or fall back.
+- If more than a quarter of the sampled colors fail, the pack falls back to
+  `palette` (or `theme` when it has no palette).
+- If the check passes and at least one sampled color needed lifting, `original`
+  is kept with per-cell contrast lift: low-contrast cells are blended toward
+  the theme foreground by up to 25 percent at render time and in dialog
+  previews.
 
 ## Animations and motion
 
@@ -117,7 +131,12 @@ The renderer has two one-shot safety nets:
 2. If the average is over 20 ms, it halves the effective fps once, never below
    5, and toasts.
 
-Neither net oscillates. A style change by the user can reselect `original`.
+Neither net oscillates, and auto-degradation persists across theme and state
+updates until the user changes style, changes fps, or switches packs. When the
+renderer draws, horizontal cells sharing a foreground color are grouped into
+`drawText` calls when supported, falling back to `setCell`. Unmounting the art
+layer (for example when opening a session) runs `onDestroy` to detach its state
+listener.
 
 ## SSH and tmux
 

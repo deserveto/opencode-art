@@ -160,3 +160,67 @@ test("a live-synced global change is visible after a successful write", async ()
   assert.equal(sanitized.effective().enabled, true)
   assert.equal(sanitized.effective().fps, null)
 })
+
+test("parseSettings validates dim as an integer from 0 to 80", () => {
+  const validZero = parseSettings({ dim: 0 })
+  assert.deepEqual(validZero.warnings, [])
+  assert.equal(validZero.settings.dim, 0)
+
+  const validMax = parseSettings({ dim: 80 })
+  assert.deepEqual(validMax.warnings, [])
+  assert.equal(validMax.settings.dim, 80)
+
+  for (const bad of [-1, 81, 12.5, "40", null, Number.NaN]) {
+    const parsed = parseSettings({ dim: bad, fps: 10 })
+    assert.equal(parsed.settings.dim, undefined)
+    assert.equal(parsed.settings.fps, 10)
+    assert.deepEqual(parsed.warnings, ["dim must be an integer from 0 to 80"])
+  }
+})
+
+test("mergeLayers handles dim precedence without changing unset shape", () => {
+  assert.equal("dim" in mergeLayers({}, {}), false)
+  assert.deepEqual(mergeLayers({ dim: 0 }, { dim: 50 }), {
+    enabled: PLUGIN_DEFAULTS.enabled,
+    pack: PLUGIN_DEFAULTS.pack,
+    style: null,
+    fps: null,
+    dim: 0,
+  })
+  assert.deepEqual(mergeLayers({}, { dim: 35 }), {
+    enabled: PLUGIN_DEFAULTS.enabled,
+    pack: PLUGIN_DEFAULTS.pack,
+    style: null,
+    fps: null,
+    dim: 35,
+  })
+})
+
+test("createSettingsStore persists setDim and exposes project() layer", async () => {
+  const global: {
+    version: number
+    enabled?: boolean
+    pack?: string
+    style?: Settings["style"]
+    fps?: number
+    dim?: number
+  } = { version: SETTINGS_VERSION }
+  const store = createSettingsStore(
+    {
+      readGlobal: () => global,
+      updateGlobal: async (mutation) => {
+        const draft = { ...global, version: SETTINGS_VERSION }
+        mutation(draft)
+        Object.assign(global, draft)
+      },
+      projectPath: "/nowhere/art.json",
+      onError: () => {},
+    },
+    { pack: "pinned", dim: 25 },
+  )
+  assert.deepEqual(store.project(), { pack: "pinned", dim: 25 })
+  await store.setDim(60)
+  assert.equal(global.dim, 60)
+  assert.equal(store.effective().dim, 25)
+  assert.equal(store.project().dim, 25)
+})

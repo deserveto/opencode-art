@@ -26,6 +26,7 @@ export function scene(t, ctx) {
 | `cols` | yes | Grid width. |
 | `rows` | yes | Grid height. |
 | `loop` | no | Loop length in seconds. Defaults to `6`. |
+| `seed` | no | Default integer seed for `ctx.seed`. Overridden by `--seed`; defaults to `0`. |
 
 The baker samples `t = i / fps` at a fixed step. `t` is in seconds. It bakes
 `loop * fps` frames, capped at 600. `loop` is the intended loop length; it is
@@ -40,7 +41,7 @@ not a field in the resulting pack.
 | `frame` | Frame index being baked, starting at 0. |
 | `fps` | Sampling rate, same as `meta.fps`. |
 | `palette` | Palette passed to the bake, as an array of color strings. |
-| `seed` | Integer seed for deterministic variation. The CLI currently passes `0`. |
+| `seed` | Integer seed for deterministic variation, from `--seed`, `meta.seed`, or `0`. |
 | `helpers` | The helper functions below, for scenes that cannot import `opencode-art/scene`. |
 
 ## Return values
@@ -65,7 +66,8 @@ return {
 
 For a color scene, `chars` is the same array of strings and `colors` is an
 array of `rows` arrays. Each cell is a `#rrggbb` string or `null`. `null` means
-the default style color (the theme faint color in `original` style).
+the default style color (the theme faint color in `original` style, emitted as
+a reset in the `.ans` sidecar), while explicit `#000000` is preserved as black.
 
 The returned grid must be exact. The bake fails if a row is short, long, or
 contains a wide, combining, or control character. Trailing spaces are cells and
@@ -202,9 +204,10 @@ stale canvas fail the bake instead of shifting the grid.
 Bake and validate a scene:
 
 ```sh
-opencode-art bake scene.mjs --out ~/.config/opencode/arts/my-scene --cols 40 --rows 12 --fps 10
+opencode-art bake scene.mjs --out ~/.config/opencode/arts/my-scene --cols 40 --rows 12 --fps 10 --seed 1 --fit contain
 opencode-art validate ~/.config/opencode/arts/my-scene
 opencode-art preview ~/.config/opencode/arts/my-scene --frame 0 --width 80
+opencode-art preview ~/.config/opencode/arts/my-scene --width 80 --animate --loops 1
 ```
 
 The bake writes `frames/*.txt`, optional `frames/*.ans`, and `art.json`, then

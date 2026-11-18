@@ -1,12 +1,15 @@
 import assert from "node:assert/strict"
+import { writeFileSync } from "node:fs"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { homedir, tmpdir } from "node:os"
 import path from "node:path"
 import test from "node:test"
 import { RGBA } from "@opentui/core"
 import { createStore, produce } from "solid-js/store"
 import type { Plugin } from "@opencode/plugin/tui"
-import { createArtState, type ArtState } from "../src/plugin/state.ts"
+import { configRoot } from "../src/plugin/host.ts"
+import { createArtState, watcherRoots, type ArtState } from "../src/plugin/state.ts"
+import { projectSettingsPath } from "../src/settings/index.ts"
 
 interface Harness {
   readonly context: Plugin.Context
@@ -261,6 +264,206 @@ test("state changes push to subscribers", async () => {
     off()
     await box.state.setEnabled(true)
     assert.deepEqual(events, ["push", "push"])
+  } finally {
+    box.state?.dispose()
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
+  }
+})
+
+test("configRoot ignores empty or whitespace XDG_CONFIG_HOME and trims valid paths", () => {
+  const previous = process.env.XDG_CONFIG_HOME
+  try {
+    process.env.XDG_CONFIG_HOME = ""
+    assert.equal(configRoot(), path.join(homedir(), ".config"))
+    process.env.XDG_CONFIG_HOME = "   "
+    assert.equal(configRoot(), path.join(homedir(), ".config"))
+    process.env.XDG_CONFIG_HOME = "  /tmp/custom-xdg  "
+    assert.equal(configRoot(), "/tmp/custom-xdg")
+  } finally {
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+  }
+})
+
+test("setDim clamps, persists, notifies, and respects project dim lock", async () => {
+  const box = await harness()
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = box.configRoot
+  try {
+    await writeCanvasPack(box.projectRoot, "fool", 4, 2, grid(4, 2))
+    box.state = await createArtState(box.context)
+    assert.equal(box.state.dim(), 0)
+
+    let pushes = 0
+    const off = box.state.subscribe(() => {
+      pushes++
+    })
+
+    await box.state.setDim(35)
+    assert.equal(box.state.dim(), 35)
+    assert.equal(box.state.settings.effective().dim, 35)
+    assert.equal(pushes, 1)
+    assert.equal(box.toasts.at(-1)?.message, "Dim: 35%")
+
+    await box.state.setDim(120)
+    assert.equal(box.state.dim(), 80)
+    assert.equal(box.toasts.at(-1)?.variant, "warning")
+    assert.match(box.toasts.at(-1)?.message ?? "", /clamped to 80/)
+
+    await writeFile(path.join(box.projectRoot, ".opencode", "art.json"), JSON.stringify({ dim: 20 }))
+    await box.state.reload()
+    assert.equal(box.state.dim(), 20)
+
+    await box.state.setDim(50)
+    assert.equal(box.state.dim(), 20)
+    assert.equal(box.toasts.at(-1)?.variant, "warning")
+    assert.equal(box.toasts.at(-1)?.message, "Dim is set to 20% by this project's .opencode/art.json.")
+    off()
+  } finally {
+    box.state?.dispose()
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
+  }
+})
+
+test("setStyle and setPack warn when project .opencode/art.json pins them", async () => {
+  const box = await harness()
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = box.configRoot
+  try {
+    await writeCanvasPack(box.projectRoot, "fool", 4, 2, grid(4, 2))
+    await writeCanvasPack(box.projectRoot, "logo", 3, 2, grid(3, 2))
+    await writeFile(
+      path.join(box.projectRoot, ".opencode", "art.json"),
+      JSON.stringify({ pack: "fool", style: "mono" }),
+    )
+    box.state = await createArtState(box.context)
+
+    await box.state.setStyle("theme")
+    assert.equal(box.state.style()?.effective, "mono")
+    assert.equal(box.toasts.at(-1)?.variant, "warning")
+    assert.equal(box.toasts.at(-1)?.message, "Style is set to mono by this project's .opencode/art.json.")
+
+    assert.equal(await box.state.setPack("logo"), true)
+    assert.equal(box.toasts.at(-1)?.variant, "warning")
+    assert.equal(box.toasts.at(-1)?.message, 'Pack is pinned to "fool" by this project\'s .opencode/art.json.')
+
+    // Reload honors project pack override again.
+    await box.state.reload()
+    assert.equal(box.state.activeId(), "fool")
+
+    // Changing project pack in .opencode/art.json switches active pack on reload.
+    await writeFile(
+      path.join(box.projectRoot, ".opencode", "art.json"),
+      JSON.stringify({ pack: "logo", style: "mono" }),
+    )
+    await box.state.reload()
+    assert.equal(box.state.activeId(), "logo")
+  } finally {
+    box.state?.dispose()
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
+  }
+})
+
+test("degradeStyle and degradeFps update state and notify subscribers", async () => {
+  const box = await harness()
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = box.configRoot
+  try {
+    await writeCanvasPack(box.projectRoot, "fool", 4, 2, grid(4, 2))
+    box.state = await createArtState(box.context)
+    let pushes = 0
+    const off = box.state.subscribe(() => {
+      pushes++
+    })
+
+    const nextStyle = {
+      requested: "original" as const,
+      effective: "theme" as const,
+      stops: [[10, 20, 30, 255]] as const,
+      original: false,
+      reason: "render too slow",
+    }
+    box.state.degradeStyle(nextStyle)
+    assert.deepEqual(box.state.style(), nextStyle)
+
+    box.state.degradeFps(5)
+    assert.equal(box.state.fps(), 5)
+    assert.equal(pushes, 2)
+    off()
+  } finally {
+    box.state?.dispose()
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
+  }
+})
+
+test("concurrent reload queues a follow-up pass when edits happen mid-reload", async () => {
+  const box = await harness()
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = box.configRoot
+  try {
+    await writeCanvasPack(box.projectRoot, "fool", 4, 2, grid(4, 2))
+    box.state = await createArtState(box.context)
+    const canvasPath = path.join(box.projectRoot, ".opencode", "arts", "fool", "canvas.txt")
+
+    let injected = false
+    let secondReload: Promise<void> | undefined
+    const off = box.state.subscribe(() => {
+      if (injected) return
+      injected = true
+      writeFileSync(canvasPath, "wxyz\nwxyz")
+      secondReload = box.state?.reload()
+    })
+
+    await writeFile(canvasPath, "mnop\nmnop")
+    const firstReload = box.state.reload()
+    await firstReload
+    await secondReload
+    off()
+
+    assert.equal(injected, true)
+    assert.equal(box.state.pack()?.frames[0]?.chars, "wxyzwxyz")
+  } finally {
+    box.state?.dispose()
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
+  }
+})
+
+test("watcherRoots tracks project arts, user arts, and .opencode/art.json without bundledFrames", async () => {
+  const box = await harness()
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = box.configRoot
+  try {
+    await writeCanvasPack(box.projectRoot, "fool", 4, 2, grid(4, 2))
+    await writeCanvasPack(box.projectRoot, "logo", 3, 2, grid(3, 2))
+    await writeFile(path.join(box.projectRoot, ".opencode", "art.json"), JSON.stringify({ pack: "fool" }))
+    box.state = await createArtState(box.context, { watchIntervalMs: 25, watchDebounceMs: 30 })
+
+    const roots = watcherRoots(box.state.roots)
+    assert.deepEqual(roots, [
+      box.state.roots.projectArts,
+      box.state.roots.globalArts,
+      projectSettingsPath(box.projectRoot),
+    ])
+    assert.equal(roots.includes(box.state.roots.bundledFrames), false)
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await writeFile(path.join(box.projectRoot, ".opencode", "art.json"), JSON.stringify({ pack: "logo", dim: 45 }))
+    const started = Date.now()
+    while (box.state.activeId() !== "logo" && Date.now() - started < 3000) {
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+    assert.equal(box.state.activeId(), "logo")
+    assert.equal(box.state.dim(), 45)
   } finally {
     box.state?.dispose()
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME

@@ -65,6 +65,11 @@
       "default": "mono",
       "description": "Style used when neither the global nor the project setting sets one."
     },
+    "fit": {
+      "enum": ["stretch", "contain", "cover", "center"],
+      "default": "stretch",
+      "description": "How the pack fits the display box."
+    },
     "ramp": {
       "type": "string",
       "minLength": 2,
@@ -155,7 +160,7 @@
         "speed": { "$ref": "#/$defs/speed" },
         "seed": { "$ref": "#/$defs/seed" }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "wave": {
       "type": "object",
@@ -166,7 +171,7 @@
         "speed": { "$ref": "#/$defs/speed" },
         "axis": { "$ref": "#/$defs/axis" }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "drift": {
       "type": "object",
@@ -177,7 +182,7 @@
         "speed": { "$ref": "#/$defs/speed" },
         "axis": { "$ref": "#/$defs/axis" }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "twinkle": {
       "type": "object",
@@ -188,7 +193,7 @@
         "speed": { "$ref": "#/$defs/speed" },
         "seed": { "$ref": "#/$defs/seed" }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "scanline": {
       "type": "object",
@@ -199,7 +204,7 @@
         "speed": { "$ref": "#/$defs/speed" },
         "axis": { "$ref": "#/$defs/axis" }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     }
   }
 }

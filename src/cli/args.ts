@@ -6,13 +6,26 @@ export interface ParsedArgs {
   readonly flags: ReadonlyMap<string, FlagValue>
 }
 
-const BOOLEAN_FLAGS = new Set(["force", "dither", "invert", "help", "mono"])
+const BOOLEAN_FLAGS = new Set(["force", "dither", "invert", "help", "mono", "animate"])
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
   const positionals: string[] = []
   const flags = new Map<string, FlagValue>()
+  let afterDoubleDash = false
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index]
+    if (afterDoubleDash) {
+      positionals.push(arg)
+      continue
+    }
+    if (arg === "--") {
+      afterDoubleDash = true
+      continue
+    }
+    if (arg === "-h") {
+      flags.set("help", true)
+      continue
+    }
     if (arg.startsWith("--")) {
       const body = arg.slice(2)
       if (body.length === 0) continue

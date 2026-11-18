@@ -14,7 +14,8 @@ export interface ArtRoots {
 }
 
 export function configRoot(): string {
-  return process.env.XDG_CONFIG_HOME ?? path.join(homedir(), ".config")
+  const xdg = process.env.XDG_CONFIG_HOME?.trim()
+  return xdg ? xdg : path.join(homedir(), ".config")
 }
 
 export function artRoots(projectDirectory: string | undefined): ArtRoots {

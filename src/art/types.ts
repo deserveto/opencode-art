@@ -29,6 +29,10 @@ export type StyleName = "mono" | "theme" | "palette" | "original"
 
 export const STYLE_NAMES: readonly StyleName[] = ["mono", "theme", "palette", "original"]
 
+export type FitMode = "stretch" | "contain" | "cover" | "center"
+
+export const FIT_MODES: readonly FitMode[] = ["stretch", "contain", "cover", "center"]
+
 export const PACK_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/
 
 export type Scope = "project" | "user" | "bundled"
@@ -83,6 +87,7 @@ export interface Manifest {
   readonly cols: number
   readonly rows: number
   readonly defaultStyle: StyleName
+  readonly fit?: FitMode
   readonly ramp: string
   readonly palette?: readonly string[]
   readonly frames?: string
