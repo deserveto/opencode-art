@@ -92,6 +92,14 @@ export default Plugin.define({
             ],
           }))
           debug("command layer registered")
+          setTimeout(() => {
+            try {
+              const ids = context.keymap.commands().map((command) => command.id)
+              debug(`reachable commands=${ids.length} hasArt=${ids.includes("opencode-art.art")}`)
+            } catch (error) {
+              debug(`reachable command check failed: ${message(error)}`)
+            }
+          }, 1000)
           return (
             <Show when={context.ui.router.current().type === "home"}>
               <ArtLayer context={context} state={state} />
