@@ -18,7 +18,11 @@ function message(error: unknown): string {
 function ArtLayer(props: { readonly context: Context; readonly state: ArtState }) {
   const dimensions = useTerminalDimensions()
   const [home, setHome] = createSignal(props.context.ui.router.current().type === "home")
-  const theme = createMemo(() => themeColors(props.context.theme))
+  const [themeTick, setThemeTick] = createSignal(0)
+  const theme = createMemo(() => {
+    themeTick()
+    return themeColors(props.context.theme)
+  })
 
   createEffect(() => {
     setHome(props.context.ui.router.current().type === "home")
@@ -29,6 +33,7 @@ function ArtLayer(props: { readonly context: Context; readonly state: ArtState }
   createEffect(() => {
     void props.context.themeMode
     void props.context.theme.text.base
+    setThemeTick((value) => value + 1)
     props.state.refreshTheme()
   })
 

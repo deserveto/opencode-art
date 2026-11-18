@@ -203,6 +203,7 @@ export class ArtRenderable extends Renderable {
   set theme(value: ThemeColors | undefined) {
     this._theme = value
     this._originalFallback = null
+    this.invalidate()
   }
 
   get onError(): ((message: string) => void) | undefined {
@@ -366,6 +367,15 @@ export class ArtRenderable extends Renderable {
     return color
   }
 
+  private backgroundColor(): RGBA {
+    // A transparent background is serialized as opaque black by the terminal
+    // writer, which erases the host's themed home surface. Paint the theme base.
+    const background = this._theme?.background
+    return background
+      ? RGBA.fromInts(background[0], background[1], background[2], background[3])
+      : RGBA.fromInts(0, 0, 0, 255)
+  }
+
   private paint(buffer: OptimizedBuffer, grid: Grid): void {
     const style = this._style
     const ramp = this._pack?.manifest.ramp ?? ""
@@ -377,7 +387,7 @@ export class ArtRenderable extends Renderable {
     const stops = this.stopColors(style)
     const usesOriginal = style.original && grid.colors !== null
     const caps = usesOriginal ? this.capabilities() : null
-    const background = RGBA.fromInts(0, 0, 0, 0)
+    const background = this.backgroundColor()
 
     for (let y = area.startY; y < area.endY; y++) {
       const screenY = oy + y
@@ -416,7 +426,7 @@ export class ArtRenderable extends Renderable {
     if (!area) return
 
     const foreground = RGBA.fromInts(255, 255, 255, 255)
-    const background = RGBA.fromInts(0, 0, 0, 0)
+    const background = this.backgroundColor()
     for (let y = area.startY; y < area.endY; y++) {
       const screenY = oy + y
       for (let x = area.startX; x < area.endX; x++) {

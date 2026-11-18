@@ -25,7 +25,7 @@ async function main() {
     muted: [180, 180, 190, 255],
     base: [235, 235, 240, 255],
     hue: [235, 235, 240, 255],
-    background: [0, 0, 0, 255],
+    background: [30, 30, 46, 255],
   }
   const style = resolveStyle(requested, pack, capabilities, theme)
 
@@ -67,6 +67,11 @@ async function main() {
         .captureSpans()
         .lines.flatMap((line) => line.spans.map((span) => span.fg.toString())),
     )
+    const backgrounds = new Set(
+      setup
+        .captureSpans()
+        .lines.flatMap((line) => line.spans.map((span) => span.bg.toString())),
+    )
     console.log(
       JSON.stringify({
         pack: pack.id,
@@ -75,6 +80,7 @@ async function main() {
         effective: style.effective,
         cellsUpdated: setup.getNativeStats().cellsUpdated,
         foregrounds: foregrounds.size,
+        backgrounds: [...backgrounds],
       }),
     )
   } finally {
