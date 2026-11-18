@@ -5,6 +5,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import type { ResolvedTheme } from "@opencode/theme/tui"
 import type { Pack, PackCandidate, StyleName } from "../art/types.ts"
 import type { ArtState } from "../plugin/state.ts"
+import { debug } from "../plugin/debug.ts"
 import { buildPreview } from "./preview.ts"
 
 interface DialogProps {
@@ -35,6 +36,7 @@ export function ArtDialog(props: DialogProps) {
   createEffect(() => {
     reloadTick()
     const candidate = current()
+    debug(`preview effect candidate=${candidate?.id ?? "none"} list=${list().length} selected=${selectedIndex()}`)
     if (!candidate) {
       setPreviewPack(null)
       return
@@ -42,6 +44,7 @@ export function ArtDialog(props: DialogProps) {
     let live = true
     void props.state.load(candidate.id).then((result) => {
       if (!live) return
+      debug(`preview load ok=${result.ok} id=${result.ok ? result.value.id : "err"} frames=${result.ok ? result.value.frames.length : 0}`)
       if (result.ok) {
         setPreviewPack(result.value)
         setPreviewError(null)
@@ -67,14 +70,20 @@ export function ArtDialog(props: DialogProps) {
     const height = pack
       ? Math.max(6, Math.min(22, Math.round((pack.manifest.rows * width) / pack.manifest.cols)))
       : 12
+    debug(`preview size terminal=${dimensions().width}x${dimensions().height} -> ${width}x${height}`)
     return { width, height }
   })
 
   const preview = createMemo(() => {
     const pack = previewPack()
-    if (!pack) return []
+    if (!pack) {
+      debug("preview memo no pack")
+      return []
+    }
     const size = previewSize()
-    return buildPreview(pack, resolved() ?? props.state.resolve(pack), size.width, size.height)
+    const built = buildPreview(pack, resolved() ?? props.state.resolve(pack), size.width, size.height)
+    debug(`preview memo pack=${pack.id} size=${size.width}x${size.height} lines=${built.length}`)
+    return built
   })
 
   function rgba(color: readonly [number, number, number, number]): RGBA {

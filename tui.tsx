@@ -6,6 +6,7 @@ import { runArtCommand } from "./src/commands/run.tsx"
 import { ArtRenderable } from "./src/render/index.ts"
 import { themeColors } from "./src/plugin/host.ts"
 import { createArtState, type ArtState } from "./src/plugin/state.ts"
+import { debug } from "./src/plugin/debug.ts"
 
 type Context = Plugin.Context
 
@@ -92,6 +93,15 @@ export default Plugin.define({
           )
         },
       })
+
+      setTimeout(() => {
+        debug("dialog auto open")
+        void runArtCommand(context, state)
+        setTimeout(() => {
+          debug("dialog auto close")
+          context.ui.dialog.clear()
+        }, 5000)
+      }, 1500)
 
       return () => {
         remove()

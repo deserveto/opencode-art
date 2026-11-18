@@ -2,6 +2,7 @@
 import type { Plugin } from "@opencode/plugin/tui"
 import { STYLE_NAMES, type StyleName } from "../art/types.ts"
 import type { ArtState } from "../plugin/state.ts"
+import { debug } from "../plugin/debug.ts"
 import { ArtDialog } from "./dialog.tsx"
 import { parseArtCommand } from "./parse.ts"
 
@@ -10,10 +11,12 @@ type Context = Plugin.Context
 export function openArtDialog(context: Context, state: ArtState): void {
   try {
     state.refreshTheme()
-    context.ui.dialog.set({ size: "xlarge", centered: true })
+    // show() resets presentation to medium; apply the size after it opens.
     context.ui.dialog.show(() => (
       <ArtDialog state={state} theme={context.theme} close={() => context.ui.dialog.clear()} />
     ))
+    context.ui.dialog.set({ size: "xlarge", centered: true })
+    debug("openArtDialog shown xlarge")
   } catch (error) {
     context.ui.toast.show({
       message: `Could not open the art dialog: ${error instanceof Error ? error.message : String(error)}`,
