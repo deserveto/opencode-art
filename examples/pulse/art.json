@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "pulse",
+  "name": "Pulse",
+  "description": "A single line of sine motion for mono terminals.",
+  "author": "opencode-art contributors",
+  "license": "CC-BY-4.0",
+  "fps": 12,
+  "cols": 40,
+  "rows": 12,
+  "defaultStyle": "mono",
+  "canvas": "canvas.txt",
+  "effects": [
+    { "type": "wave", "intensity": 0.3, "speed": 1, "axis": "x" }
+  ]
+}

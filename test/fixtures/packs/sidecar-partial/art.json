@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "sidecar-partial",
+  "name": "Partial Sidecar",
+  "fps": 10,
+  "cols": 4,
+  "rows": 2,
+  "frames": "frames"
+}

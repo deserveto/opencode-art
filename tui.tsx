@@ -1,0 +1,91 @@
+/** @jsxImportSource @opentui/solid */
+import { Plugin } from "@opencode/plugin/tui"
+import { extend, useTerminalDimensions } from "@opentui/solid"
+import { createEffect, createMemo, createSignal } from "solid-js"
+import { runArtCommand } from "./src/commands/run.tsx"
+import { ArtRenderable } from "./src/render/index.ts"
+import { themeColors } from "./src/plugin/host.ts"
+import { createArtState, type ArtState } from "./src/plugin/state.ts"
+
+type Context = Plugin.Context
+
+extend({ "art-background": ArtRenderable })
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function ArtLayer(props: { readonly context: Context; readonly state: ArtState }) {
+  const dimensions = useTerminalDimensions()
+  const [home, setHome] = createSignal(props.context.ui.router.current().type === "home")
+  const theme = createMemo(() => themeColors(props.context.theme))
+
+  createEffect(() => {
+    setHome(props.context.ui.router.current().type === "home")
+  })
+
+  return (
+    <box
+      position="absolute"
+      left={0}
+      top={0}
+      width={dimensions().width}
+      height={dimensions().height}
+      zIndex={-1}
+    >
+      <art-background
+        pack={props.state.pack()}
+        style={props.state.style() ?? undefined}
+        fps={props.state.fps()}
+        enabled={props.state.enabled()}
+        paused={!home()}
+        animations={props.state.animations}
+        theme={theme()}
+        onError={(text) => props.context.ui.toast.show({ message: text, variant: "error" })}
+        onDegrade={(text) => props.context.ui.toast.show({ message: text, variant: "warning" })}
+      />
+    </box>
+  )
+}
+
+export default Plugin.define({
+  id: "opencode-art.tui",
+  async setup(context) {
+    let state: ArtState
+    try {
+      state = await createArtState(context)
+    } catch (error) {
+      context.ui.toast.show({
+        title: "opencode-art",
+        message: `Art could not start: ${message(error)}`,
+        variant: "error",
+        duration: 8000,
+      })
+      return
+    }
+
+    context.keymap.layer(() => ({
+      mode: "global",
+      commands: [
+        {
+          id: "opencode-art.art",
+          title: "ASCII art",
+          description: "Browse, select, and configure the animated ASCII background",
+          group: "Art",
+          slash: { name: "art", arguments: true },
+          run: (input) => runArtCommand(context, state, input),
+        },
+      ],
+    }))
+
+    const removeSlot = context.ui.slot({
+      append: "app",
+      render: () => <ArtLayer context={context} state={state} />,
+    })
+
+    return () => {
+      removeSlot()
+      state.dispose()
+    }
+  },
+})

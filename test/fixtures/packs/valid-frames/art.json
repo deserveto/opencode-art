@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "valid-frames",
+  "name": "Valid Frames",
+  "fps": 10,
+  "cols": 5,
+  "rows": 3,
+  "description": "Three frames with color sidecars.",
+  "author": "test",
+  "license": "CC-BY-4.0",
+  "defaultStyle": "original",
+  "ramp": " .:-=+*#%@",
+  "frames": "frames"
+}

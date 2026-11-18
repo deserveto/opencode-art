@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "valid-canvas",
+  "name": "Valid Canvas",
+  "fps": 12,
+  "cols": 5,
+  "rows": 3,
+  "defaultStyle": "palette",
+  "palette": [
+    "#313244",
+    "#89b4fa",
+    "#f5c2e7"
+  ],
+  "ramp": " .:-=+*#%@",
+  "canvas": "canvas.txt",
+  "effects": [
+    {
+      "type": "shimmer",
+      "intensity": 0.25,
+      "speed": 1,
+      "seed": 7
+    }
+  ]
+}

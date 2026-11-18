@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "future-schema",
+  "name": "Future Schema",
+  "fps": 10,
+  "cols": 4,
+  "rows": 2,
+  "canvas": "canvas.txt"
+}

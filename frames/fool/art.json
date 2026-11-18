@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "fool",
+  "name": "The Fool",
+  "description": "The Fool Argon, animated: a tarot figure on a sinking rock above a living ocean.",
+  "author": "sangh",
+  "license": "CC-BY-4.0",
+  "fps": 10,
+  "cols": 180,
+  "rows": 50,
+  "defaultStyle": "mono",
+  "ramp": " .:;-~=+*x%#w@&W",
+  "frames": "frames",
+  "source": {
+    "type": "artwork",
+    "note": "Baked from The Fool Argon by scripts/bake-fool.cjs"
+  }
+}

@@ -1,4 +1,4 @@
-import type { Grid, Pack, RGB, StyleName } from "../art/types.ts"
+import type { Grid, RGB, StyleName } from "../art/types.ts"
 
 /** RGBA as 0–255 channels; keeps render logic free of host color objects. */
 export type RGBA4 = readonly [number, number, number, number]

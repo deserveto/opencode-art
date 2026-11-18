@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "not-the-folder",
+  "name": "Wrong Id",
+  "fps": 10,
+  "cols": 4,
+  "rows": 2,
+  "canvas": "canvas.txt"
+}

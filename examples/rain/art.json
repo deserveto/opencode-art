@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "rain",
+  "name": "Rain",
+  "description": "A short loop of falling rain.",
+  "author": "opencode-art contributors",
+  "license": "CC-BY-4.0",
+  "fps": 8,
+  "cols": 24,
+  "rows": 8,
+  "defaultStyle": "mono",
+  "frames": "frames"
+}

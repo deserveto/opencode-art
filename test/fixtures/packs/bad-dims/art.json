@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "bad-dims",
+  "name": "Bad Dims",
+  "fps": 10,
+  "cols": 5,
+  "rows": 3,
+  "canvas": "canvas.txt"
+}

@@ -14,6 +14,15 @@ export interface Settings {
 
 export const SETTINGS_VERSION = 1
 
+/** Mutable shape for the durable global record. Unset fields fall through. */
+export interface StorageSettings {
+  version: number
+  enabled?: boolean
+  pack?: string
+  style?: StyleName
+  fps?: number
+}
+
 /** Plugin defaults; `null` means "defer to the pack, then to these". */
 export const PLUGIN_DEFAULTS = {
   enabled: true,

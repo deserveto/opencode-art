@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "effects-with-frames",
+  "name": "Effects With Frames",
+  "fps": 10,
+  "cols": 4,
+  "rows": 2,
+  "frames": "frames",
+  "effects": [
+    {
+      "type": "wave",
+      "intensity": 0.5
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "unknown-field-warning",
+  "name": "Unknown Field",
+  "fps": 10,
+  "cols": 4,
+  "rows": 2,
+  "canvas": "canvas.txt",
+  "futureField": {
+    "anything": true
+  },
+  "anotherUnknown": null
+}

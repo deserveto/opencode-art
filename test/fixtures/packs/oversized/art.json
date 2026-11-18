@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "oversized",
+  "name": "Oversized",
+  "fps": 10,
+  "cols": 400,
+  "rows": 200,
+  "frames": "frames"
+}

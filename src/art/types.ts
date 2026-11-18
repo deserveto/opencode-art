@@ -29,6 +29,8 @@ export type StyleName = "mono" | "theme" | "palette" | "original"
 
 export const STYLE_NAMES: readonly StyleName[] = ["mono", "theme", "palette", "original"]
 
+export const PACK_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/
+
 export type Scope = "project" | "user" | "bundled"
 
 /** Row-major display grid. `chars` holds one BMP code unit per cell. */
