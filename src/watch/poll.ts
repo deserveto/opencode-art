@@ -10,10 +10,26 @@ export interface PollOptions {
 }
 
 const MAX_ENTRIES = 4000
+const MAX_DEPTH = 3
+
+async function scanDir(dir: string, depth: number, parts: string[]): Promise<void> {
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    if (parts.length > MAX_ENTRIES) {
+      parts.push("truncated")
+      return
+    }
+    const full = path.join(dir, entry.name)
+    const info = await stat(full).catch(() => null)
+    parts.push(`${full}:${info?.size ?? 0}:${info?.mtimeMs ?? 0}`)
+    if (entry.isDirectory() && depth > 0) await scanDir(full, depth - 1, parts)
+  }
+}
 
 /**
- * Directory mtimes alone miss edits inside a pack (file content does not move
- * the directory mtime), so every manifest and frame is stat'ed by name.
+ * Directory mtimes alone miss edits inside a pack, so every entry is stat'ed
+ * by name. Pack subdirectories are walked (up to a small depth) because a
+ * manifest may point `frames` at any relative directory, not only `frames/`.
  */
 export async function scanSignature(roots: readonly string[]): Promise<string> {
   const parts: string[] = []
@@ -23,33 +39,8 @@ export async function scanSignature(roots: readonly string[]): Promise<string> {
       parts.push(`${root}:missing`)
       continue
     }
-    const packs = await readdir(root, { withFileTypes: true }).catch(() => [])
-    for (const pack of packs) {
-      if (!pack.isDirectory()) continue
-      const packDir = path.join(root, pack.name)
-      parts.push(`${packDir}:${(await stat(packDir)).mtimeMs}`)
-      const entries = await readdir(packDir, { withFileTypes: true }).catch(() => [])
-      for (const entry of entries) {
-        const full = path.join(packDir, entry.name)
-        if (entry.isDirectory()) {
-          if (entry.name !== "frames") continue
-          parts.push(`${full}:${(await stat(full).catch(() => null))?.mtimeMs ?? 0}`)
-          const frames = await readdir(full, { withFileTypes: true }).catch(() => [])
-          for (const frame of frames) {
-            if (!frame.isFile()) continue
-            const info = await stat(path.join(full, frame.name)).catch(() => null)
-            parts.push(`${full}/${frame.name}:${info?.size ?? 0}:${info?.mtimeMs ?? 0}`)
-          }
-        } else if (entry.isFile()) {
-          const info = await stat(full).catch(() => null)
-          parts.push(`${full}:${info?.size ?? 0}:${info?.mtimeMs ?? 0}`)
-        }
-        if (parts.length > MAX_ENTRIES) {
-          parts.push("truncated")
-          break
-        }
-      }
-    }
+    parts.push(`${root}:${rootInfo.mtimeMs}`)
+    await scanDir(root, MAX_DEPTH, parts)
   }
   parts.sort()
   return parts.join("|")

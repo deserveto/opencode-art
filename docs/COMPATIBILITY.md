@@ -42,11 +42,9 @@ Detection uses the host first and the environment as a fallback:
 | Truecolor | `renderer.capabilities.rgb` | `COLORTERM` contains `truecolor` or `24bit` |
 | 256 colors | `renderer.capabilities.ansi256` | `TERM` contains `256color` |
 | 16 colors | A color terminal without RGB or 256 | A non-empty `TERM` that is not `dumb` |
-| Unicode | `renderer.capabilities.unicode` | `TERM` is not `dumb` |
 
-`NO_COLOR` with any non-empty value forces `mono`. `TERM=dumb` forces `mono`
-and disables Unicode. A missing or unreadable host capability object falls back
-to the environment.
+`NO_COLOR` with any non-empty value forces `mono`. `TERM=dumb` forces `mono`.
+A missing or unreadable host capability object falls back to the environment.
 
 The dialog footer shows the effective capability as `truecolor`, `256 colors`,
 `16 colors`, or `no color`.
@@ -62,7 +60,8 @@ The dialog footer shows the effective capability as `truecolor`, `256 colors`,
 
 `original` keeps exact sidecar RGB on truecolor. On 256-color terminals it is
 kept but quantized. On 16-color terminals it falls back to `palette` (or
-`theme` when the pack has no palette).
+`theme` when the pack has no palette). A cell with no foreground color uses the
+theme faint color; pure black is treated the same way.
 
 ## Style resolution
 
@@ -102,7 +101,7 @@ or fall back.
 
 ## Animations and motion
 
-OpenCode's `animations: false` setting is respected:
+OpenCode's `animations: false` setting in `cli.json` is respected:
 
 - Frame packs show frame 0 and do not advance.
 - Canvas packs show the base canvas at `t = 0`; effects do not run.

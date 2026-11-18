@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "opencode-art pack manifest",
-  "description": "Manifest for an opencode-art pack. A pack is a directory named after its id. Unknown top-level fields are allowed and reported as warnings by the loader.",
+  "description": "Structural schema for an opencode-art pack manifest. The loader additionally enforces width-1 and unique ramp glyphs, printable text, and per-cell file rules. A pack is a directory named after its id. Unknown top-level fields are allowed and reported as warnings by the loader.",
   "type": "object",
   "required": ["schemaVersion", "id", "name", "fps", "cols", "rows"],
   "properties": {

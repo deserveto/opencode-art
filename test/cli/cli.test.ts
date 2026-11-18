@@ -109,6 +109,41 @@ test("init rejects an invalid folder name", async () => {
   }
 })
 
+test("init refuses an existing pack without --force and clears frames with force", async () => {
+  const dir = path.join(await temp(), "rebuild")
+  try {
+    await starter(dir)
+    const scene = path.join(dir, "scene.mjs")
+    await writeFile(scene, SCENE)
+    assert.equal(run(["bake", scene, "--out", dir]).code, 0)
+    assert.ok((await readdir(path.join(dir, "frames"))).length > 0)
+
+    const refused = run(["init", dir])
+    assert.equal(refused.code, 1)
+    assert.match(refused.stderr, /not empty/)
+
+    const forced = run(["init", dir, "--force"])
+    assert.equal(forced.code, 0, forced.stderr)
+    assert.equal(await stat(path.join(dir, "frames")).then(() => true, () => false), false)
+    assert.equal(run(["validate", dir]).code, 0)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("a scene that exits without output is a user error", async () => {
+  const dir = await temp()
+  try {
+    const scene = path.join(dir, "silent.mjs")
+    await writeFile(scene, "process.exit(0)\n")
+    const result = run(["bake", scene, "--out", path.join(dir, "out")])
+    assert.equal(result.code, 1)
+    assert.match(result.stderr, /scene/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test("validate prints every error and exits 1", async () => {
   const dir = path.join(await temp(), "broken")
   try {

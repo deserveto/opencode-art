@@ -209,6 +209,36 @@ test("reloading a pack that became invalid keeps the last good frames", async ()
     assert.equal(box.state.pack()?.frames[0]?.chars, "abcdbcde")
     assert.equal(box.state.activeId(), "fool")
     assert.ok(box.state.problems().length > 0)
+
+    await writeFile(path.join(box.projectRoot, ".opencode", "arts", "fool", "canvas.txt"), grid(4, 2))
+    await box.state.reload()
+    assert.equal(box.state.problems().length, 0)
+    assert.equal(box.state.pack()?.frames[0]?.chars, "abcdbcde")
+  } finally {
+    box.state?.dispose()
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
+  }
+})
+
+test("validate reports a discovery problem by id", async () => {
+  const box = await harness()
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = box.configRoot
+  try {
+    await writeCanvasPack(box.projectRoot, "fool", 4, 2, grid(4, 2))
+    const bad = path.join(box.projectRoot, ".opencode", "arts", "bad")
+    await mkdir(bad, { recursive: true })
+    await writeFile(
+      path.join(bad, "art.json"),
+      JSON.stringify({ schemaVersion: 1, id: "bad", name: "Bad", fps: 0, cols: 4, rows: 2, canvas: "canvas.txt" }),
+    )
+    await writeFile(path.join(bad, "canvas.txt"), grid(4, 2))
+    box.state = await createArtState(box.context)
+    const report = await box.state.validate("bad")
+    assert.equal(report.ok, false)
+    assert.ok(report.lines.some((line) => /fps/.test(line)))
   } finally {
     box.state?.dispose()
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME

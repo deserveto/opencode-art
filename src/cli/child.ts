@@ -19,9 +19,14 @@ function killTree(pid: number | undefined): void {
     spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" })
   } else {
     try {
-      process.kill(pid, "SIGKILL")
+      process.kill(-pid, "SIGKILL")
     } catch {
-      // Already gone.
+      // Fall back to the direct child if the group is already gone.
+      try {
+        process.kill(pid, "SIGKILL")
+      } catch {
+        // Already gone.
+      }
     }
   }
 }
@@ -32,6 +37,7 @@ export function runChild(command: string, args: readonly string[], options: Chil
       env: options.env ?? process.env,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
+      detached: process.platform !== "win32",
     })
     const stdout: Buffer[] = []
     let stderr = ""

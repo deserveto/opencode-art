@@ -114,3 +114,49 @@ test("a successful global write is visible through readGlobal and project still 
   assert.equal(store.effective().pack, "fool")
   assert.equal(store.effective().enabled, false)
 })
+
+test("a live-synced global change is visible after a successful write", async () => {
+  const global: {
+    version: number
+    enabled?: boolean
+    pack?: string
+    style?: Settings["style"]
+    fps?: number
+  } = { version: SETTINGS_VERSION }
+  const store = createSettingsStore(
+    {
+      readGlobal: () => global,
+      updateGlobal: async (mutation) => {
+        const draft = { ...global, version: SETTINGS_VERSION } as {
+          version: number
+          enabled?: boolean
+          pack?: string
+          style?: Settings["style"]
+          fps?: number
+        }
+        mutation(draft)
+        Object.assign(global, draft)
+      },
+      projectPath: "/nowhere/art.json",
+      onError: () => {},
+    },
+    {},
+  )
+  await store.setFps(5)
+  assert.equal(store.effective().fps, 5)
+  global.fps = 12
+  assert.equal(store.effective().fps, 12)
+
+  const invalid: Settings = { version: SETTINGS_VERSION, enabled: "yes" as unknown as boolean, fps: 999 }
+  const sanitized = createSettingsStore(
+    {
+      readGlobal: () => invalid,
+      updateGlobal: async () => {},
+      projectPath: "/nowhere/art.json",
+      onError: () => {},
+    },
+    {},
+  )
+  assert.equal(sanitized.effective().enabled, true)
+  assert.equal(sanitized.effective().fps, null)
+})

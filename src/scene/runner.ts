@@ -40,6 +40,13 @@ function positiveInt(value: unknown, fallback: number, label: string, max: numbe
   return value
 }
 
+function requiredInt(value: unknown, label: string, max: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > max) {
+    fail(`${label} is required and must be an integer from 1 to ${max}`)
+  }
+  return value
+}
+
 function optionalNumber(value: string | undefined): number | undefined {
   if (value === undefined || value === "" || value === "-") return undefined
   const parsed = Number(value)
@@ -98,10 +105,13 @@ async function main(): Promise<void> {
   const module = (await import(pathToFileURL(scenePath).href)) as Record<string, unknown>
   const rawMeta = asRecord(module.meta)
   if (rawMeta === null) fail("scene.mjs must export const meta = { fps, cols, rows }")
+  const declaredFps = requiredInt(rawMeta.fps, "meta.fps", MAX_FPS)
+  const declaredCols = requiredInt(rawMeta.cols, "meta.cols", MAX_COLS)
+  const declaredRows = requiredInt(rawMeta.rows, "meta.rows", MAX_ROWS)
   const meta: SceneMeta = {
-    fps: positiveInt(optionalNumber(fpsArg) ?? rawMeta.fps, 10, "fps", MAX_FPS),
-    cols: positiveInt(optionalNumber(colsArg) ?? rawMeta.cols, 180, "cols", MAX_COLS),
-    rows: positiveInt(optionalNumber(rowsArg) ?? rawMeta.rows, 50, "rows", MAX_ROWS),
+    fps: positiveInt(optionalNumber(fpsArg), declaredFps, "fps", MAX_FPS),
+    cols: positiveInt(optionalNumber(colsArg), declaredCols, "cols", MAX_COLS),
+    rows: positiveInt(optionalNumber(rowsArg), declaredRows, "rows", MAX_ROWS),
     loop: optionalNumber(loopArg) ?? (typeof rawMeta.loop === "number" ? rawMeta.loop : 6),
     name: typeof rawMeta.name === "string" ? rawMeta.name : undefined,
   }

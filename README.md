@@ -38,24 +38,42 @@ package.
 
 ### Local development
 
-Point the TUI config at the repository instead of an installed package. In
-`~/.config/opencode/cli.json`, add the repo to the plugin list:
+The TUI part and the server part load from different places on a local
+checkout.
 
-```json
-{
-  "plugins": [
-    { "package": "C:/dev/opencode-art" }
-  ]
-}
-```
+1. Point the TUI config at the repository. In
+   `~/.config/opencode/cli.json`, add:
 
-Use an absolute path to the repository. The entry shape is
-`{ "package": "..." }`; the existing development setup keeps plugins under
-`~/.config/opencode/plugins/` and uses `{ "package": "./plugins/<name>" }`.
+   ```json
+   {
+     "plugins": [
+       { "package": "C:/dev/opencode-art" }
+     ]
+   }
+   ```
+
+   Use an absolute path. The entry shape is `{ "package": "..." }`; the
+   existing development setup uses `{ "package": "./plugins/<name>" }` for
+   plugins under `~/.config/opencode/plugins/`.
+
+2. The server part registers the authoring skill. Local plugins are
+   auto-discovered from `~/.config/opencode/plugins/`, so link the repository
+   into that folder:
+
+   ```powershell
+   New-Item -ItemType Junction -Path "$HOME/.config/opencode/plugins/opencode-art" -Target "C:/dev/opencode-art"
+   ```
+
+   ```sh
+   ln -s /path/to/opencode-art ~/.config/opencode/plugins/opencode-art
+   ```
+
+3. Restart OpenCode. Do not add the package twice; a public install with
+   `opencode plugin add` replaces both local steps.
+
 On Linux and macOS the config file is usually
 `~/.config/opencode/cli.json`; on Windows it is
-`%USERPROFILE%\.config\opencode\cli.json`. Restart or reload OpenCode after
-changing the file.
+`%USERPROFILE%\.config\opencode\cli.json`.
 
 ## First run
 
@@ -148,12 +166,12 @@ writes into a repository. A project override is a deliberate hand edit:
 ```
 
 All fields are optional. Project values win when settings load. Because the
-dialog writes global settings, a pack selected in `/art` applies for the
-current session; the project file remains the shared default for new sessions.
-A project can, for example, disable art for a serious repository; `/art on`
-cannot override that, and the plugin explains why in a toast. Invalid fields
-are ignored one at a time. A file with a newer `version` is ignored as a whole
-with a warning.
+dialog writes global settings, a pack selected in `/art` is saved and used in
+later sessions; a project `pack` still wins on load. A project can, for
+example, disable art for a serious repository; `/art on` cannot override that,
+and the plugin explains why in a toast. Invalid fields are ignored one at a
+time. A file with a `version` other than 1 is ignored as a whole with a
+warning.
 
 ## Styles
 

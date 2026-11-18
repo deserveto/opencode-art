@@ -38,7 +38,7 @@ node --test --test-name-pattern "original" "test/**/*.test.ts"
 | `test/smoke.test.ts` | Shared constants are importable. |
 | `test/commands.test.ts` | `/art` argument parsing, case folding, missing arguments, unknown names. |
 | `test/plugin.test.ts` | Pack selection, project overrides, fallback, persistence, reload behavior. |
-| `test/settings.test.ts` | Field-by-field settings validation, newer versions, precedence, failed global writes. |
+| `test/settings.test.ts` | Field-by-field settings validation, unsupported versions, precedence, failed global writes, live sync. |
 | `test/watch.test.ts` | Poll signatures, content changes, debounced reload, clean stop. |
 | `test/art/manifest.test.ts` | Required fields, caps, id/folder match, effects, unknown fields. |
 | `test/art/grid.test.ts` | Line endings, trailing spaces, dimensions, width-1 glyph rejection. |
@@ -124,9 +124,11 @@ Run these against a live OpenCode session before a release.
 `test/cli/scene.test.ts` covers the scene helpers: `clamp`, `lerp`, `noise`,
 `loadCanvas` dimensions, determinism, color travel, and input immutability.
 
-A real video decode with `ffmpeg` installed is not covered; only the
-missing-binary path is. GIF fixtures live in `test/fixtures/media`. Other media
-is generated in a temporary directory during the test.
+A real video decode with `ffmpeg` installed is not covered by the automated
+suite; only the missing-binary path is. A manual bake with a 1-second MP4 and
+`ffmpeg` on `PATH` produced a valid 5-frame pack. GIF fixtures live in
+`test/fixtures/media`. Other media is generated in a temporary directory during
+the test.
 
 ## Headless render smoke
 

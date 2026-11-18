@@ -100,3 +100,13 @@ test("isWidthOne rejects everything that would shift the grid", () => {
   assert.equal(isWidthOne("ab"), false)
   assert.equal(isWidthOne(""), false)
 })
+
+test("a huge line-count mismatch returns bounded errors", () => {
+  const result = parseGrid("\n".repeat(100_000), 4, 2, "a.txt")
+  assert.ok(result.errors.length <= 52, `got ${result.errors.length} errors`)
+  assert.match(messages(result.errors), /rows/)
+})
+
+test("isWidthOne rejects the Yijing block that some terminals draw wide", () => {
+  assert.equal(isWidthOne("\u4DC0"), false)
+})

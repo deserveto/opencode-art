@@ -15,7 +15,7 @@ Subcommand names are case-insensitive.
 | `/art set <id>` | Select a pack by id. An unknown id shows close matches. |
 | `/art style <mono\|theme\|palette\|original>` | Set the color style globally. |
 | `/art fps <1-30>` | Set playback fps. The value is rounded, then clamped to 1-30. |
-| `/art reload` | Re-read the project settings, re-scan every arts folder, and reload the active pack. Reports the pack and problem count. |
+| `/art reload` | Re-read the project settings, re-scan every arts folder, and reload the active pack. Reports the active id, pack count, and problem count. |
 | `/art validate [id\|path]` | Validate one pack or every pack. See below. |
 | `/art help` | Show the command list and the three arts paths. |
 
@@ -23,8 +23,8 @@ There is no `/art list`; the dialog is the list. There is no `/art create`;
 creation happens in chat with the agent or by editing files.
 
 A bare `/art` opens the dialog. An unknown subcommand shows
-`Unknown command "..."`. Missing arguments show a usage toast instead of
-guessing.
+`Unknown command "..."` and suggests `/art help`. Missing arguments show a
+usage toast instead of guessing.
 
 ### Validation details
 
@@ -32,14 +32,14 @@ guessing.
 `/` or `\` in the argument. A leading `~` is expanded to the home directory.
 
 - Valid id or path: a success toast, or `<path>: valid` for a path.
-- Invalid path: a dialog lists every error with file and line. Up to 20 lines
-  are shown; all error lines are also written to the plugin log.
+- Invalid path: a dialog lists errors with file and line. Up to 40 lines
+  are shown; the rest are written to the plugin log.
 - Invalid id or all packs: a toast shows the issue count and opens the dialog.
   The Problems section lists the first error for each invalid pack.
 - Unknown id: reports `No pack with id "..."`.
 
-Packs are validated before they become selectable. A bad pack never partially
-renders.
+Discovery checks manifests and file stats. Frame contents are validated when a
+pack loads; a bad pack never partially renders.
 
 ## Dialog
 
@@ -122,15 +122,15 @@ The project file is committed and shared. Its shape:
 
 All fields are optional. A field that is absent falls through to the next
 layer. A project value wins when settings load. A pack selected in the dialog
-or with `/art set` applies for the current session and is written to global
-settings; the project file remains the default for new sessions.
+or with `/art set` is written to global settings and used in later sessions; a
+project `pack` still wins on load.
 
 The plugin never writes the project file. This is deliberate: changing a
 repository's settings is your decision, not a side effect of opening a dialog.
 Edit the file by hand and commit it if the whole team should share it.
 
 An invalid field is ignored individually so one typo does not wipe the file.
-A file that is not a JSON object, cannot be read, or has a `version` newer than
+A file that is not a JSON object, cannot be read, or has a `version` other than
 1 is ignored as a whole, with a warning. Unknown fields are preserved because
 the plugin does not rewrite the file.
 

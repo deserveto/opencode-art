@@ -41,6 +41,7 @@ not a field in the resulting pack.
 | `fps` | Sampling rate, same as `meta.fps`. |
 | `palette` | Palette passed to the bake, as an array of color strings. |
 | `seed` | Integer seed for deterministic variation. The CLI currently passes `0`. |
+| `helpers` | The helper functions below, for scenes that cannot import `opencode-art/scene`. |
 
 ## Return values
 
@@ -64,7 +65,7 @@ return {
 
 For a color scene, `chars` is the same array of strings and `colors` is an
 array of `rows` arrays. Each cell is a `#rrggbb` string or `null`. `null` means
-the default style color.
+the default style color (the theme faint color in `original` style).
 
 The returned grid must be exact. The bake fails if a row is short, long, or
 contains a wide, combining, or control character. Trailing spaces are cells and

@@ -3,7 +3,7 @@ import { homedir } from "node:os"
 import path from "node:path"
 import { createSignal, type Accessor } from "solid-js"
 import type { Pack, PackCandidate, PackError, PackProblem, Result, StyleName } from "../art/types.ts"
-import { discoverPacks, loadCandidate, loadPack, validatePackDir } from "../art/index.ts"
+import { discoverPacks, loadCandidate, loadPack } from "../art/index.ts"
 import { detectCapabilities, resolveStyle } from "../render/index.ts"
 import type { ResolvedStyle } from "../render/types.ts"
 import {
@@ -21,6 +21,7 @@ type Context = Plugin.Context
 export interface ValidationReport {
   readonly ok: boolean
   readonly lines: readonly string[]
+  readonly warnings: readonly string[]
 }
 
 export interface ArtState {
@@ -65,19 +66,25 @@ type Notify = (text: string, variant?: ToastVariant) => void
 type NotifyOnce = (key: string, text: string, variant?: ToastVariant) => void
 
 async function createState(context: Context): Promise<ArtState> {
+  let disposed = false
   const roots = artRoots(context.location?.directory)
   const animations = await readAnimations()
   const rendererCaps = context.renderer.capabilities
   const capabilities = detectCapabilities(
-    {
-      rgb: rendererCaps?.rgb ?? false,
-      ansi256: rendererCaps?.ansi256 ?? false,
-      unicode: Boolean(rendererCaps?.unicode),
-    },
+    rendererCaps
+      ? {
+          rgb: rendererCaps.rgb,
+          ansi256: rendererCaps.ansi256,
+          unicode: Boolean(rendererCaps.unicode),
+        }
+      : undefined,
     process.env,
   )
 
-  const notify: Notify = (text, variant = "info") => context.ui.toast.show({ message: text, variant })
+  const notify: Notify = (text, variant = "info") => {
+    if (disposed) return
+    context.ui.toast.show({ message: text, variant })
+  }
   const reported = new Set<string>()
   const notifyOnce: NotifyOnce = (key, text, variant = "warning") => {
     if (reported.has(key)) return
@@ -136,6 +143,14 @@ async function createState(context: Context): Promise<ArtState> {
   function refreshCandidates(): void {
     setCandidates(index.candidates)
     refreshProblems()
+    for (const problem of index.problems) {
+      const first = problem.errors[0]
+      notifyOnce(
+        `discovery:${problem.dir}`,
+        first ? `${problem.id} is invalid: ${errorLine(first)}` : `${problem.id} is invalid.`,
+        "warning",
+      )
+    }
   }
 
   function resolveFor(target: Pack): ResolvedStyle {
@@ -153,6 +168,9 @@ async function createState(context: Context): Promise<ArtState> {
     setFps(effective.fps ?? target.manifest.fps)
     const resolved = resolveFor(target)
     setStyle(resolved)
+    for (const warning of target.warnings.slice(0, 3)) {
+      notifyOnce(`warn:${target.dir}:${warning}`, warning, "info")
+    }
     if (resolved.reason && resolved.effective !== resolved.requested) {
       const key = `${target.dir}:${resolved.requested}:${resolved.effective}`
       if (!warnedStyles.has(key)) {
@@ -269,10 +287,11 @@ async function createState(context: Context): Promise<ArtState> {
   }
 
   async function reload(): Promise<void> {
-    if (reloading) return
+    if (disposed || reloading) return
     reloading = true
     try {
       cache.clear()
+      deepProblems.clear()
       await store.reload()
       index = await discoverPacks(roots.projectRoot, roots.globalArts, roots.bundledFrames)
       refreshCandidates()
@@ -293,12 +312,16 @@ async function createState(context: Context): Promise<ArtState> {
   }
 
   function syncWatcher(): void {
+    if (disposed) return
     const shouldWatch = store.effective().enabled
     if (shouldWatch && !stopWatch) {
       stopWatch = startPolling({
         roots: () => [roots.projectArts, roots.globalArts, roots.bundledFrames],
         onChanged: reload,
-        onError: (text) => notifyOnce(`watch:${text}`, `Watching arts failed: ${text}`),
+        onError: (text) => {
+          console.error(`[opencode-art] watch error: ${text}`)
+          notifyOnce(`watch:${text}`, `Watching arts failed: ${text}`)
+        },
       })
     } else if (!shouldWatch && stopWatch) {
       stopWatch()
@@ -331,9 +354,10 @@ async function createState(context: Context): Promise<ArtState> {
       notify("No packs found. Ask the agent in chat to create one.", "warning")
       return
     }
-    const currentIndex = Math.max(0, list.findIndex((entry) => entry.id === currentId))
+    const found = list.findIndex((entry) => entry.id === currentId)
+    const currentIndex = found < 0 ? -1 : found
     for (let step = 1; step <= list.length; step++) {
-      const candidate = list[(currentIndex + step) % list.length]
+      const candidate = list[(currentIndex + step + list.length) % list.length]
       if (!candidate) continue
       if (await activate(candidate.id, true)) {
         notify(`${candidate.manifest.name} (${candidate.id}, ${candidate.scope})`, "success")
@@ -349,6 +373,11 @@ async function createState(context: Context): Promise<ArtState> {
       if (target) notify(`${target.manifest.name} (${target.id}, ${target.scope})`, "success")
       return true
     }
+    const problem = problems().find((entry) => entry.id === id)
+    if (problem) {
+      notify(`Pack "${id}" is invalid. Details are in /art → Problems.`, "error")
+      return false
+    }
     const close = matches(id)
     notify(close.length ? `Unknown pack "${id}". Did you mean: ${close.join(", ")}?` : `Unknown pack "${id}".`)
     return false
@@ -363,14 +392,21 @@ async function createState(context: Context): Promise<ArtState> {
     const resolved = resolveFor(current)
     setStyle(resolved)
     if (resolved.effective !== nextStyle) {
-      notify(`Using ${resolved.effective} instead of ${nextStyle}: ${resolved.reason ?? "not available"}`, "warning")
+      const available: StyleName[] = ["mono", "theme"]
+      if (current.manifest.palette?.length) available.push("palette")
+      if (current.frames.some((frame) => frame.colors)) available.push("original")
+      notify(
+        `Using ${resolved.effective} instead of ${nextStyle}: ${resolved.reason ?? "not available"}. Available: ${available.join(", ")}.`,
+        "warning",
+      )
     } else {
       notify(`Style: ${nextStyle}`, "success")
     }
   }
 
   async function setFpsValue(value: number): Promise<void> {
-    const clamped = Math.min(30, Math.max(1, Math.round(value)))
+    const rounded = Math.round(value)
+    const clamped = Math.min(30, Math.max(1, rounded))
     await store.setFps(clamped)
     const effective = store.effective().fps ?? current?.manifest.fps ?? clamped
     setFps(effective)
@@ -378,31 +414,38 @@ async function createState(context: Context): Promise<ArtState> {
       notify(`FPS is set to ${effective} by this project's .opencode/art.json.`, "warning")
       return
     }
-    notify(
-      clamped === value ? `FPS: ${clamped}` : `FPS clamped to ${clamped} (1–30).`,
-      clamped === value ? "success" : "warning",
-    )
+    if (clamped !== value) {
+      const reason = value < 1 || value > 30 ? `clamped to ${clamped}` : `rounded to ${clamped}`
+      notify(`FPS ${reason} (1–30).`, "warning")
+      return
+    }
+    notify(`FPS: ${clamped}`, "success")
   }
 
   async function validate(target?: string): Promise<ValidationReport> {
     const lines: string[] = []
+    const warnings: string[] = []
     let ok = true
-    if (target && /[\\/]/.test(target)) {
+    if (target && (/[\\/]/.test(target) || target.startsWith("~"))) {
       const dir = path.resolve(target.replace(/^~(?=$|[\\/])/, homedir()))
-      const errors = await validatePackDir(dir)
-      ok = errors.length === 0
-      for (const error of errors) lines.push(errorLine(error))
-      if (ok) lines.push(`${dir}: valid`)
-      return { ok, lines }
+      const result = await loadPack(dir)
+      if (result.ok) {
+        lines.push(`${dir}: valid`)
+        warnings.push(...result.value.warnings)
+      } else {
+        ok = false
+        for (const error of result.error) lines.push(errorLine(error))
+      }
+      return { ok, lines, warnings }
     }
     const list = target ? index.candidates.filter((entry) => entry.id === target) : index.candidates
     if (target && list.length === 0) {
-      const known = [...deepProblems.values()].find((problem) => problem.id === target)
+      const known = problems().find((problem) => problem.id === target)
       if (known) {
         for (const error of known.errors) lines.push(`${known.id}: ${errorLine(error)}`)
-        return { ok: false, lines }
+        return { ok: false, lines, warnings }
       }
-      return { ok: false, lines: [`No pack with id "${target}".`] }
+      return { ok: false, lines: [`No pack with id "${target}".`], warnings }
     }
     if (!target) {
       for (const problem of problems()) {
@@ -411,15 +454,17 @@ async function createState(context: Context): Promise<ArtState> {
       }
     }
     for (const candidate of list) {
+      warnings.push(...candidate.warnings)
       const result = await loadCandidate(candidate)
       if (result.ok) {
         lines.push(`${candidate.id}: valid`)
+        warnings.push(...result.value.warnings)
       } else {
         ok = false
         for (const error of result.error) lines.push(`${candidate.id}: ${errorLine(error)}`)
       }
     }
-    return { ok, lines }
+    return { ok, lines, warnings }
   }
 
   async function load(id: string): Promise<Result<Pack, readonly PackError[]>> {
@@ -457,6 +502,7 @@ async function createState(context: Context): Promise<ArtState> {
     },
     matches,
     dispose: () => {
+      disposed = true
       if (stopWatch) stopWatch()
       stopWatch = null
     },

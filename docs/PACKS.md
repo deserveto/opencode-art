@@ -198,8 +198,7 @@ Rules:
 - `canvas.ans` is optional on its own; a canvas has only one frame.
 - A sidecar has at most 4096 unique colors. The bundled Fool uses 64.
 - A cell with no preceding foreground sequence has no sidecar color. In
-  `original` style it renders black, so color visible cells explicitly or reset
-  to a color after a space.
+  `original` style it uses the theme faint color, not black.
 - A sidecar whose text does not match its frame, or that exceeds the color cap,
   rejects the pack. Unsupported escape sequences are stripped with a warning.
 
@@ -227,9 +226,10 @@ exceeds a cap.
 
 ## Validation
 
-Every rule above is checked before a pack becomes selectable. A pack with any
-error is skipped, listed in the dialog's Problems section, and never partially
-rendered.
+Discovery checks the manifest and the frame/sidecar stats. Frame contents are
+validated when a pack loads. A pack with any error is never partially rendered:
+it is listed in the dialog's Problems section and, when selected, the last good
+art stays while the error is reported.
 
 Additional checks:
 

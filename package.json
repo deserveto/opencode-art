@@ -23,7 +23,9 @@
     "skills/",
     "bin/",
     "docs/",
+    "scripts/",
     "README.md",
+    "CONTRIBUTING.md",
     "LICENSE",
     "LICENSE-ART"
   ],

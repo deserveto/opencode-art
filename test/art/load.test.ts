@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { symlink, writeFile } from "node:fs/promises"
+import { rm, symlink, writeFile } from "node:fs/promises"
 import path from "node:path"
 import test from "node:test"
 import { discoverPacks, loadCandidate, loadPack, validatePackDir } from "../../src/art/index.ts"
@@ -310,6 +310,41 @@ test("a canvas symlink inside the pack root loads", async (t) => {
   }
   const result = await loadPack(dir)
   assert.ok(result.ok, result.ok ? "" : messages(result.error))
+})
+
+test("a frame symlink that escapes the pack root is rejected", async (t) => {
+  const dir = await makePack(t, "linked-frame", {
+    "art.json": art({ id: "linked-frame", frames: "frames" }),
+    "frames/000.txt": CANVAS,
+  })
+  const outside = path.join(path.dirname(dir), "outside.txt")
+  await writeFile(outside, CANVAS)
+  await rm(path.join(dir, "frames", "000.txt"))
+  try {
+    await symlink(outside, path.join(dir, "frames", "000.txt"))
+  } catch {
+    t.skip("symlinks are not permitted on this machine")
+    return
+  }
+  const errors = await validatePackDir(dir)
+  assert.ok(errors.some((entry) => entry.code === "path"), messages(errors))
+})
+
+test("a sidecar symlink that escapes the pack root is rejected", async (t) => {
+  const dir = await makePack(t, "linked-ans", {
+    "art.json": art({ id: "linked-ans", frames: "frames" }),
+    "frames/000.txt": CANVAS,
+  })
+  const outside = path.join(path.dirname(dir), "outside.ans")
+  await writeFile(outside, "abcd\nefgh\n")
+  try {
+    await symlink(outside, path.join(dir, "frames", "000.ans"))
+  } catch {
+    t.skip("symlinks are not permitted on this machine")
+    return
+  }
+  const errors = await validatePackDir(dir)
+  assert.ok(errors.some((entry) => entry.code === "path"), messages(errors))
 })
 
 test("an oversized art.json is rejected before reading", async (t) => {

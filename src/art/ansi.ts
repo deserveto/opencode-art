@@ -46,6 +46,7 @@ export function parseSidecar(
   grid: Grid,
   file: string,
 ): { colors?: Uint8Array; warnings: string[]; errors: PackError[] } {
+  text = text.replace(/^\uFEFF/, "")
   const warnings: string[] = []
   const errors: PackError[] = []
   const warningSet = new Set<string>()

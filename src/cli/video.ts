@@ -18,6 +18,9 @@ export async function decodeVideo(file: string, options: VideoOptions): Promise<
   const width = options.cols
   const height = options.rows * 2
   const frames = Math.min(600, Math.max(1, Math.round(options.loop * options.fps)))
+  if (width * height * frames * 3 > 128 * 1024 * 1024) {
+    throw new Error("video output is too large to buffer; reduce --cols, --rows, --fps, or --loop")
+  }
   const filter = `fps=${options.fps},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`
   let result
   try {

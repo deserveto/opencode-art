@@ -42,7 +42,7 @@ export function parseSettings(raw: unknown): ParsedSettings {
     return {
       settings: {},
       warnings: [
-        `settings version ${raw.version} is newer than this plugin supports (${SETTINGS_VERSION}); ignoring the file`,
+        `settings version ${raw.version} is not supported (expected ${SETTINGS_VERSION}); ignoring the file`,
       ],
     }
   }
@@ -123,18 +123,28 @@ export function createSettingsStore(host: SettingsHost, initialProject: Settings
   let pending: Settings = {}
 
   function globalValue(): Settings {
-    return { ...host.readGlobal(), ...pending }
+    // A foreign or older TUI can write invalid values; sanitize on read.
+    return { ...parseSettings(host.readGlobal()).settings, ...pending }
+  }
+
+  function clearPending(field: keyof Settings, value: unknown): void {
+    if (pending[field] !== value) return
+    const next: Record<string, unknown> = { ...pending }
+    delete next[field]
+    pending = next as Settings
   }
 
   function effective(): EffectiveSettings {
     return mergeLayers(project, globalValue())
   }
 
-  async function write(mutation: (draft: StorageSettings) => void): Promise<void> {
+  async function write(mutation: (draft: StorageSettings) => void): Promise<boolean> {
     try {
       await host.updateGlobal(mutation)
+      return true
     } catch (error) {
       host.onError(`Could not save settings: ${message(error)}`)
+      return false
     }
   }
 
@@ -148,31 +158,35 @@ export function createSettingsStore(host: SettingsHost, initialProject: Settings
     },
     async setEnabled(value) {
       pending = { ...pending, enabled: value }
-      await write((draft) => {
+      const ok = await write((draft) => {
         draft.version = SETTINGS_VERSION
         draft.enabled = value
       })
+      if (ok) clearPending("enabled", value)
     },
     async setPack(id) {
       pending = { ...pending, pack: id }
-      await write((draft) => {
+      const ok = await write((draft) => {
         draft.version = SETTINGS_VERSION
         draft.pack = id
       })
+      if (ok) clearPending("pack", id)
     },
     async setStyle(style) {
       pending = { ...pending, style }
-      await write((draft) => {
+      const ok = await write((draft) => {
         draft.version = SETTINGS_VERSION
         draft.style = style
       })
+      if (ok) clearPending("style", style)
     },
     async setFps(fps) {
       pending = { ...pending, fps }
-      await write((draft) => {
+      const ok = await write((draft) => {
         draft.version = SETTINGS_VERSION
         draft.fps = fps
       })
+      if (ok) clearPending("fps", fps)
     },
   }
 }

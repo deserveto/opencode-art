@@ -19,6 +19,7 @@ export interface AnimatedFrames {
 }
 
 const MAX_PIXELS = 64_000_000
+const MAX_ANIMATED_PIXELS = 256_000_000
 
 function checkDimensions(width: number, height: number, label: string): void {
   if (!(width > 0) || !(height > 0)) throw new Error(`${label} has no pixels`)
@@ -97,7 +98,12 @@ export async function decodeStill(file: string): Promise<RgbaImage> {
     return fromPixels(decoded.data, decoded.width, decoded.height, decoded.channels ?? 4, decoded.depth ?? 8)
   }
   if (extension === "jpg" || extension === "jpeg") {
-    const decoded = decodeJpeg(buffer, { useTArray: true, formatAsRGBA: true })
+    const decoded = decodeJpeg(buffer, {
+      useTArray: true,
+      formatAsRGBA: true,
+      maxResolutionInMP: 64,
+      maxMemoryUsageInMB: 512,
+    })
     checkDimensions(decoded.width, decoded.height, file)
     return { width: decoded.width, height: decoded.height, data: new Uint8ClampedArray(decoded.data) }
   }
@@ -122,6 +128,11 @@ export async function decodeAnimation(file: string): Promise<AnimatedFrames> {
   const width = gif.lsd.width
   const height = gif.lsd.height
   checkDimensions(width, height, file)
+  if (width * height * gif.frames.length > MAX_ANIMATED_PIXELS) {
+    throw new Error(
+      `${file} has ${gif.frames.length} frames at ${width}x${height}; the animated media cap is 256 megapixels total. Downscale or shorten it.`,
+    )
+  }
   const parsed = decompressFrames(gif, true)
   const canvas = new Uint8ClampedArray(width * height * 4)
   const frames: RgbaImage[] = []

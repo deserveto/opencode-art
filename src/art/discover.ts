@@ -54,7 +54,9 @@ async function checkCandidate(
   let sidecarBytes = 0
   const sidecarRel = rel.replace(/\.txt$/, ".ans")
   const sidecarAbs = safeResolve(dir, sidecarRel)
-  if (sidecarAbs !== null) {
+  if (sidecarAbs === null) {
+    errors.push(error(sidecarRel, "path", `${sidecarRel}: resolves outside the pack root`))
+  } else {
     const sidecarSize = await fileSize(sidecarAbs)
     if (sidecarSize !== null) {
       sidecarBytes = sidecarSize

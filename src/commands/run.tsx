@@ -45,6 +45,17 @@ function isStyle(value: string | undefined): value is StyleName {
   return typeof value === "string" && (STYLE_NAMES as readonly string[]).includes(value)
 }
 
+async function safeAlert(context: Context, title: string, message: string): Promise<void> {
+  try {
+    await context.ui.dialog.alert({ title, message })
+  } catch (error) {
+    context.ui.toast.show({
+      message: `${title}: ${message.split("\n")[0] ?? ""} (${error instanceof Error ? error.message : String(error)})`,
+      variant: "error",
+    })
+  }
+}
+
 export async function runArtCommand(context: Context, state: ArtState, input?: string): Promise<void> {
   const command = parseArtCommand(input)
   const toast = (message: string, variant: "info" | "success" | "warning" | "error" = "info") =>
@@ -55,7 +66,7 @@ export async function runArtCommand(context: Context, state: ArtState, input?: s
       openArtDialog(context, state)
       return
     case "help":
-      await context.ui.dialog.alert({ title: "opencode-art", message: artHelp(state) })
+      await safeAlert(context, "opencode-art", artHelp(state))
       return
     case "on":
     case "off": {
@@ -98,27 +109,45 @@ export async function runArtCommand(context: Context, state: ArtState, input?: s
     }
     case "reload": {
       await state.reload()
-      toast(`Reloaded: ${state.candidates().length} pack(s), ${state.problems().length} problem(s).`, "success")
+      const active = state.activeId() ?? "none"
+      toast(
+        `Reloaded ${active}: ${state.candidates().length} pack(s), ${state.problems().length} problem(s).`,
+        "success",
+      )
       return
     }
     case "validate": {
       const report = await state.validate(command.target)
+      const errors = report.lines.filter((line) => !line.endsWith(": valid"))
       if (report.ok) {
+        if (state.candidates().length === 0 && !command.target) {
+          toast("No packs found.", "warning")
+          return
+        }
+        if (report.warnings.length > 0) {
+          if (command.target) {
+            await safeAlert(context, "opencode-art validation", ["valid", ...report.warnings].join("\n"))
+          } else {
+            toast(
+              `All packs valid, ${report.warnings.length} warning(s). Run /art validate <id> for detail.`,
+              "warning",
+            )
+          }
+          return
+        }
         toast(command.target ? `${command.target}: valid` : "All packs valid.", "success")
         return
       }
-      for (const line of report.lines) {
-        if (!line.endsWith(": valid")) console.error(`[opencode-art] ${line}`)
-      }
-      const shown = report.lines.filter((line) => !line.endsWith(": valid")).slice(0, 20)
-      if (command.target && /[\\/]/.test(command.target)) {
-        await context.ui.dialog.alert({
-          title: "opencode-art validation",
-          message: shown.join("\n"),
-        })
+      for (const line of errors) console.error(`[opencode-art] ${line}`)
+      const detail = [...errors, ...report.warnings]
+      if (command.target) {
+        await safeAlert(context, "opencode-art validation", detail.slice(0, 40).join("\n"))
         return
       }
-      toast(`${shown.length} issue(s). Details are in /art → Problems.`, "error")
+      toast(
+        `${errors.length} issue(s)${report.warnings.length ? `, ${report.warnings.length} warning(s)` : ""}. Details are in /art → Problems.`,
+        "error",
+      )
       openArtDialog(context, state)
       return
     }

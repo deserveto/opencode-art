@@ -26,6 +26,24 @@ test("signature changes when a frame's contents change", async () => {
   }
 })
 
+test("signature follows a frames directory with a custom name", async () => {
+  const root = await tempRoot()
+  try {
+    const frames = path.join(root, "demo", "anim")
+    await mkdir(frames, { recursive: true })
+    await writeFile(path.join(root, "demo", "art.json"), JSON.stringify({ frames: "anim" }))
+    const file = path.join(frames, "000.txt")
+    await writeFile(file, "a\n")
+    const first = await scanSignature([root])
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await writeFile(file, "abcd\n")
+    const second = await scanSignature([root])
+    assert.notEqual(first, second)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test("polling reports a debounced change and stops cleanly", async () => {
   const root = await tempRoot()
   let changes = 0

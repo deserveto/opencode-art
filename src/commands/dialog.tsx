@@ -3,7 +3,7 @@ import { RGBA } from "@opentui/core"
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import type { ResolvedTheme } from "@opencode/theme/tui"
-import type { Pack, StyleName } from "../art/types.ts"
+import type { Pack, PackCandidate, StyleName } from "../art/types.ts"
 import type { ArtState } from "../plugin/state.ts"
 import { buildPreview } from "./preview.ts"
 
@@ -64,7 +64,7 @@ export function ArtDialog(props: DialogProps) {
   const preview = createMemo(() => {
     const pack = previewPack()
     if (!pack) return []
-    const cols = Math.max(16, Math.min(76, dimensions().width - 46))
+    const cols = Math.max(16, Math.min(76, dimensions().width - 50))
     const rows = Math.max(4, Math.min(18, dimensions().height - 16))
     return buildPreview(pack, resolved() ?? props.state.resolve(pack), cols, rows)
   })
@@ -76,6 +76,14 @@ export function ArtDialog(props: DialogProps) {
     const value = RGBA.fromInts(color[0], color[1], color[2], color[3])
     colors.set(key, value)
     return value
+  }
+
+  function badges(candidate: PackCandidate): string {
+    let out = "mt"
+    if (candidate.manifest.palette?.length) out += "p"
+    const pack = previewPack()
+    if (pack?.id === candidate.id && pack.frames.some((frame) => frame.colors)) out += "o"
+    return out
   }
 
   function availableStyles(pack?: Pack | null): readonly StyleName[] {
@@ -207,7 +215,7 @@ export function ArtDialog(props: DialogProps) {
       gap={1}
     >
       <box flexDirection="row" flexGrow={1} gap={2}>
-        <box width={30} flexDirection="column">
+        <box width={36} flexDirection="column">
           <text fg={muted}>Packs ({list().length})</text>
           <Show when={list().length > 0} fallback={<text fg={faint}>No packs found.</text>}>
             <For each={list()}>
@@ -226,6 +234,7 @@ export function ArtDialog(props: DialogProps) {
                   )}
                   {"  "}
                   {shortName(candidate.manifest.name)}
+                  <span style={{ fg: faint }}>{"  "}{badges(candidate)}</span>
                 </text>
               )}
             </For>

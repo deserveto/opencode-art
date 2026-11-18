@@ -101,7 +101,7 @@ The bundled Fool is 180 x 50, 10 fps, 60 frames (6 second loop), ramp ` .:;-~=+*
 
 ```sh
 node bin/opencode-art.cjs init <dir> [--force]
-node bin/opencode-art.cjs bake <input> --out <dir> [--cols 180] [--rows 50] [--fps 10] [--loop 6] [--charset " .:-=+*#%@"] [--ramp ...] [--palette "#111,#eee"] [--colors 64] [--dither] [--mono] [--invert] [--aspect 0.5] [--force]
+node bin/opencode-art.cjs bake <input> --out <dir> [--cols 180] [--rows 50] [--fps 10] [--loop 6] [--charset " .:-=+*#%@"] [--ramp ...] [--palette "#111111,#eeeeee"] [--colors 64] [--dither] [--mono] [--invert] [--aspect 0.5] [--timeout 60] [--force]
 node bin/opencode-art.cjs validate <dir>
 node bin/opencode-art.cjs preview <dir> [--frame N] [--width N]
 node bin/opencode-art.cjs help
@@ -125,12 +125,12 @@ export function scene(t, ctx) {
 }
 ```
 
-- `t` is seconds, sampled at `frame / fps`; `ctx` is `{ cols, rows, frame, fps, palette, seed }`.
+- `t` is seconds, sampled at `frame / fps`; `ctx` is `{ cols, rows, frame, fps, palette, seed, helpers }`.
 - `meta` requires `fps`, `cols`, and `rows`; `loop` defaults to `6`.
-- Return `string[]` (exactly `rows` strings of exactly `cols` width-1 chars) or `{ chars, colors }` (`colors` is `rows` arrays of `#rrggbb` or `null`; `null` uses the style color). Trailing spaces are real cells, so keep every row at full width.
-- Use `ctx.seed` for variation. Do not use `Math.random()`, `Date.now()`, timers, locale, or filesystem order. The bake uses fixed steps, so a deterministic scene re-bakes and loops identically.
+- Return `string[]` (exactly `rows` strings of exactly `cols` width-1 chars) or `{ chars, colors }` (`colors` is `rows` arrays of `#rrggbb` or `null`; `null` uses the theme faint color). Trailing spaces are real cells, so keep every row at full width.
+- Use `ctx.seed` (currently `0`) for variation. Do not use `Math.random()`, `Date.now()`, timers, locale, or filesystem order. The bake uses fixed steps, so a deterministic scene re-bakes and loops identically.
 - Use width-1 characters only: ASCII, box drawing, block elements. No emoji, CJK, combining marks, tabs, or control characters.
-- Helpers are exported from `opencode-art/scene`: `loadCanvas`, `wave`, `shimmer`, `drift`, `twinkle`, `scanline`, `palette`, `noise`, `clamp`, `lerp`. The example below is import-free so it bakes with any CLI build.
+- Helpers are exported from `opencode-art/scene`: `loadCanvas`, `wave`, `shimmer`, `drift`, `twinkle`, `scanline`, `palette`, `noise`, `clamp`, `lerp`. The same functions are available as `ctx.helpers` for a scene that cannot resolve the package; the example below is import-free so it bakes with any CLI build.
 - The CLI imports the scene in a child process with a timeout and memory cap. The plugin never loads a scene module, including `scene.mjs` inside a pack. Bake only scenes you trust.
 
 ## Workflow
@@ -147,11 +147,11 @@ opencode-art validate "$ARTS/rainy-city"
 opencode-art preview "$ARTS/rainy-city" --frame 0 --width 60
 ```
 
-Then tell the user `/art set rainy-city`. The watcher usually reloads the active pack on its own; `/art reload` forces a rescan. Use `--force` only when the user has agreed to replace an existing pack, and add it if `bake` refuses an initialized directory.
+Then tell the user `/art set rainy-city`. The watcher usually reloads the active pack on its own; `/art reload` forces a rescan. Use `--force` only when the user has agreed to replace a non-pack directory; baking into an initialized pack does not need it.
 
 ## Worked example: rainy city
 
-Save this as `scene.mjs`. It draws a skyline, lit windows, a moon, rain, and wet-street puddles at 60 x 20, 12 fps, with a 4 second loop. The rain makes exactly one pass per loop, so frame 0 and the frame at `t = 4` match.
+Save this as `scene.mjs`. It draws a skyline, lit windows, a moon, rain, and wet-street puddles at 60 x 20, 12 fps, with a 4 second loop. The rain makes exactly one pass per loop: the motion closes one step past the last baked frame, so the sequence repeats cleanly.
 
 ```js
 export const meta = { fps: 12, cols: 60, rows: 20, loop: 4 }
@@ -249,7 +249,7 @@ The effective style and fps come from project settings, then global settings, th
 | `id "x" does not match the folder name "y"` | The folder was renamed. | Rename the folder or fix `id`. |
 | `effects is only valid with canvas` | A frame pack declares effects. | Remove `effects`; motion must be baked into frames. |
 | `resolves outside the pack root` | Absolute path, drive letter, `..`, or an escaping symlink. | Use a path relative to the pack folder. |
-| `original` falls back to `palette` | No sidecars, a 16-color terminal, or a contrast check failed. | Add sidecars, use `theme` or `mono`, or accept the fallback. |
+| `original` falls back to `palette` or `theme` | No sidecars, a 16-color terminal, or a contrast check failed. | Add sidecars, use `theme` or `mono`, or accept the fallback. |
 | Changes do not appear | The new pack is invalid, so the last good frames stay. | Run `opencode-art validate <dir>` or `/art validate <id>`. |
 
 ## Safety and etiquette

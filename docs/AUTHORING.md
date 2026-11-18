@@ -73,10 +73,9 @@ Then run `/art reload` if the watcher has not already picked up the change.
 ### `init <dir>`
 
 Scaffolds `art.json`, a 40 x 10 `canvas.txt`, and a short README. It refuses a
-non-empty directory that is not already an opencode-art pack unless `--force`
-is passed. If the directory is an existing pack with the same id, `init`
-overwrites its `art.json`, `canvas.txt`, and `README.md`; do not point it at a
-pack you want to keep.
+non-empty directory, including an existing pack, unless `--force` is passed.
+With `--force` it replaces the scaffold files and removes any old `frames/`
+directory or `canvas.ans` so the result is a clean canvas pack.
 
 ### `bake <input> --out <dir>`
 
@@ -94,7 +93,7 @@ module produces frames.
 | `--palette` | 2-32 comma-separated hex stops for color output. | none |
 | `--colors` | Quantize to this many colors, 2-256. | `64` |
 | `--dither` | Floyd-Steinberg dithering. Implies a mono pack and conflicts with `--palette`. | off |
-| `--mono` | Force a mono pack with no color sidecars. | off |
+| `--mono` | Force a mono pack with no color sidecars. Conflicts with `--palette`. | off |
 | `--invert` | Invert luminance. | off |
 | `--aspect` | Sample aspect ratio. Terminal cells are about twice as tall as wide. | `0.5` |
 | `--timeout` | Scene timeout in seconds. | `60` |
@@ -118,8 +117,8 @@ Behavior:
 
 ### `validate <dir>`
 
-Validates a pack and prints every error with file and line. Exit code 1 on
-failure. This is the same validation the loader uses.
+Validates a pack and prints errors with file and line (up to 100, then a
+count). Exit code 1 on failure. This is the same validation the loader uses.
 
 ### `preview <dir> [--frame N] [--width N]`
 

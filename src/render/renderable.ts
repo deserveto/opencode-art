@@ -30,6 +30,7 @@ const FALLBACK_STYLE: ResolvedStyle = {
 }
 
 const MAX_STYLE_STOPS = 32
+const MAX_FIT_FRAMES = 60
 const MAX_ORIGINAL_COLORS = 4096
 const SAMPLE_WINDOW = 30
 const SLOW_FRAME_MS = 12
@@ -78,6 +79,7 @@ export class ArtRenderable extends Renderable {
   private _stopColors: RGBA[] | null = null
   private _stopColorsFor: ResolvedStyle | null = null
   private _originalColors = new Map<number, RGBA>()
+  private _originalFallback: RGBA | null = null
 
   private _samples: number[] = []
   private _degraded = false
@@ -199,6 +201,7 @@ export class ArtRenderable extends Renderable {
 
   set theme(value: ThemeColors | undefined) {
     this._theme = value
+    this._originalFallback = null
   }
 
   get onError(): ((message: string) => void) | undefined {
@@ -263,6 +266,7 @@ export class ArtRenderable extends Renderable {
     this._stopColors = null
     this._stopColorsFor = null
     this._originalColors.clear()
+    this._originalFallback = null
     this.safeRequestRender()
   }
 
@@ -312,6 +316,7 @@ export class ArtRenderable extends Renderable {
       fitted = fitFrame(pack, index, cols, rows) ?? undefined
       if (!fitted) return null
       if (reusable && cache) {
+        if (cache.frames.size >= MAX_FIT_FRAMES && !cache.frames.has(index)) cache.frames.clear()
         cache.frames.set(index, fitted)
       } else {
         this._fitCache = { pack, cols, rows, frames: new Map([[index, fitted]]) }
@@ -339,6 +344,16 @@ export class ArtRenderable extends Renderable {
     const r = colors[index * 3] ?? 0
     const g = colors[index * 3 + 1] ?? 0
     const b = colors[index * 3 + 2] ?? 0
+    if (r === 0 && g === 0 && b === 0) {
+      // A reset in a sidecar or a null scene color means "no foreground":
+      // use the theme faint color rather than painting an invisible black.
+      if (this._originalFallback) return this._originalFallback
+      const faint = this._theme?.faint
+      this._originalFallback = faint
+        ? RGBA.fromInts(faint[0], faint[1], faint[2], faint[3])
+        : RGBA.fromInts(200, 200, 200, 255)
+      return this._originalFallback
+    }
     const key = (r << 16) | (g << 8) | b
     const cached = this._originalColors.get(key)
     if (cached) return cached
@@ -488,6 +503,7 @@ export class ArtRenderable extends Renderable {
     this._displayGrid = null
     this._fitCache = null
     this._originalColors.clear()
+    this._originalFallback = null
     this.safeRequestRender()
     this.notify(this._onError, `art rendering failed: ${errorMessage(error)}`)
   }
@@ -503,7 +519,6 @@ export class ArtRenderable extends Renderable {
         this._originalColors.clear()
         this.safeRequestRender()
       }
-      this._errorCount = 0
     } catch (error) {
       this.handleError(error)
     }
@@ -537,6 +552,7 @@ export class ArtRenderable extends Renderable {
     this._stopColors = null
     this._stopColorsFor = null
     this._originalColors.clear()
+    this._originalFallback = null
     this._samples.length = 0
     super.destroySelf()
   }

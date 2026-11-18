@@ -218,7 +218,7 @@ These are hard ceilings. The CLI may downscale or quantize to fit; the loader re
 
 ### 4.7 Validation
 
-Every rule above is checked before a pack becomes selectable. A pack with any error is skipped, listed in the dialog’s Problems section, and never partially rendered.
+Discovery checks the manifest and the frame/sidecar stats. Frame contents are checked when a pack loads. A pack with any error is skipped, listed in the dialog's Problems section, and never partially rendered.
 
 Additional rules:
 
@@ -242,7 +242,7 @@ Additional rules:
 |---|---|---|---|
 | `mono` | Theme `text.faint` | Always | — |
 | `theme` | Theme tokens mapped by brightness | Always | `mono` |
-| `palette` | Pack `palette` (or a theme-derived ramp) | Palette exists | `theme`, then `mono` |
+| `palette` | Pack `palette`, or theme stops when the pack has none | Always | `theme`, then `mono` |
 | `original` | Per-cell RGB from `.ans` | Color sidecars exist and the terminal supports color | `palette`, `theme`, then `mono` |
 
 The effective style is always shown in the dialog. If it differs from the requested style, a one-time toast explains why.
@@ -270,7 +270,7 @@ Detection lives in `context.renderer.capabilities` (confirmed in Phase 0), with 
 |---|---|---|
 | Truecolor | `renderer.capabilities.rgb === true` (fallback: `COLORTERM` contains `truecolor`/`24bit`) | `original` exact; `palette` and `theme` exact. |
 | 256 colors | `renderer.capabilities.ansi256 === true` (fallback: `TERM` contains `256color`) | `original` and `palette` quantized to the nearest 256-color entry; `theme` quantized. |
-| 16 colors | Color terminal without RGB/ANSI256 | `original` and `palette` fall back to `theme` unless the user forces color; `theme` quantized. |
+| 16 colors | Color terminal without RGB/ANSI256 | `original` falls back to `palette` (or `theme` when the pack has no palette); `palette` and `theme` quantized to 16 colors. |
 | No color / `NO_COLOR` | `NO_COLOR` set, `TERM=dumb`, or no color capability | Effective style `mono`. |
 
 `NO_COLOR` is respected. The dialog shows the effective capability; the user cannot force a mode the terminal cannot render meaningfully.
@@ -278,8 +278,8 @@ Detection lives in `context.renderer.capabilities` (confirmed in Phase 0), with 
 ### 5.5 Light and dark themes
 
 - `mono`, `theme`, and `palette` use the active theme, so they follow light/dark automatically.
-- `original` colors are authored for a specific background. On a light theme, the player blends original colors toward the theme foreground/background enough to keep contrast, and falls back to `palette` if too many cells fail a contrast check.
-- The exact blend and threshold are Phase 0. The dialog labels the adjustment instead of hiding it.
+- `original` colors are authored for a specific background. On a light theme, the resolver samples the sidecar colors and tests them against the theme background. A color passes when it already reaches 2.2:1 contrast, or when a blend of at most 25% toward the theme foreground reaches 3:1. If too many sampled colors fail, the pack falls back to `palette` (or `theme` when it has no palette). Colors that pass are shown exactly; v1 does not blend per cell.
+- The dialog labels the fallback instead of hiding it.
 
 ### 5.6 Performance budget
 
@@ -322,12 +322,12 @@ Syntax (space-separated arguments; **confirmed** in Phase 0: `slash.arguments: t
 | `/art style <mono\|theme\|palette\|original>` | Set the style; unavailable style → toast with available options. |
 | `/art fps <1–30>` | Set playback fps; clamp and toast. |
 | `/art reload` | Re-scan and re-validate all pack folders. |
-| `/art validate [id\|path]` | Validate one pack or all packs; report every error. A filesystem path is accepted read-only for authors. |
+| `/art validate [id\|path]` | Validate one pack or all packs; report errors (capped at 100 per pack) and warnings. A filesystem path is accepted read-only for authors. |
 | `/art help` | List commands and the global/project arts paths. |
 
 There is no `/art list`; the dialog is the list. There is no `/art create`; creation happens in chat with the agent.
 
-The fallback is not required on `v2.3.2`; if a future host removes slash arguments, the dialog exposes every action and flat aliases (`art-on`, `art-off`, `art-next`, `art-style`, `art-fps`, `art-reload`, `art-validate`, `art-help`) keep the features reachable.
+No flat aliases are registered on `v2.3.2`; slash arguments are supported. If a future host removes slash arguments, add flat aliases (`art-on`, `art-off`, `art-next`, `art-style`, `art-fps`, `art-reload`, `art-validate`, `art-help`) so every feature stays reachable.
 
 Errors are actionable toasts, never silent failures. Validation detail goes to the plugin log and the dialog’s Problems section.
 
@@ -362,7 +362,7 @@ Shape:
 - **Project:** `<project>/.opencode/art.json` — committed and shareable. The project root is `context.location.directory` (fallback `process.cwd()`), confirmed in Phase 0.
 - Precedence: project > global > pack `defaultStyle`/`fps` > plugin default (`enabled: true`, `style: mono`, `fps: pack fps`).
 - `enabled` can be overridden per project so a serious repo can disable art.
-- Global writes use the storage API’s atomic mutation; project file writes are debounced and atomic (temp file + rename). A failed write keeps the value in memory and toasts once.
+- **Global writes use the storage API's atomic mutation.** The plugin never writes the project file; edit it by hand and commit it. A failed global write keeps the value in memory and toasts once.
 - Invalid fields are ignored individually; the file is not wiped. Unknown fields are preserved.
 - The global record is created on first change, not on install.
 
@@ -425,7 +425,7 @@ Binary: `opencode-art`.
 |---|---|
 | `opencode-art init <dir>` | Scaffold `art.json`, `canvas.txt`, and a short README. Refuses to overwrite a non-empty directory unless `--force`. |
 | `opencode-art bake <input> --out <dir>` | Bake an image, GIF, video, or `.mjs` scene into a pack. |
-| `opencode-art validate <dir>` | Validate a pack and print every error with file and line. Exit 1 on failure. |
+| `opencode-art validate <dir>` | Validate a pack and print every error with file and line (up to 100, then a count). Exit 1 on failure. |
 | `opencode-art preview <dir> [--frame N] [--width N]` | Print a downscaled still preview to stdout. |
 | `opencode-art help` | Usage. |
 
@@ -438,9 +438,11 @@ Binary: `opencode-art`.
 - `--palette` — comma-separated hex stops for color output.
 - `--colors` — quantize to N colors; default 64.
 - `--dither` — enable Floyd–Steinberg for mono output.
+- `--mono` — force a mono pack with no color sidecars; conflicts with `--palette`.
+- `--timeout` — scene timeout in seconds; default 60.
 - `--invert` — invert luminance.
 - `--aspect` — sample aspect ratio; default 0.5 (terminal cells are about twice as tall as wide).
-- `--force` — overwrite an existing pack.
+- `--force` — overwrite a non-pack output directory.
 
 Behavior:
 
@@ -524,6 +526,7 @@ opencode-art/
     commands/
     scene/                 # helpers shared by the CLI
   bin/opencode-art.cjs
+  scripts/                 # repo-only dev scripts (Fool bake, render smoke)
   skills/opencode-art/SKILL.md
   frames/fool/             # bundled default pack
   examples/                # copy-to-use packs, not loaded by default
@@ -536,6 +539,7 @@ opencode-art/
     COMMANDS.md
     COMPATIBILITY.md
     TESTING.md
+    MIGRATION.md
     SPIKE.md               # Phase 0 findings
   test/fixtures/
   .github/workflows/ci.yml
@@ -562,7 +566,8 @@ opencode-art/
   "bin": { "opencode-art": "./bin/opencode-art.cjs" },
   "files": [
     "index.ts", "tui.tsx", "src/", "frames/", "schemas/",
-    "skills/", "bin/", "docs/", "README.md", "LICENSE", "LICENSE-ART"
+    "skills/", "bin/", "docs/", "scripts/", "README.md",
+    "CONTRIBUTING.md", "LICENSE", "LICENSE-ART"
   ]
 }
 ```
@@ -644,7 +649,7 @@ opencode-art/
 
 - GitHub Actions: Ubuntu and Windows, Node LTS.
 - `npm ci`, typecheck, unit + integration tests, CLI tests.
-- No test framework dependency for runtime code; default to `node:test` with `tsx` for TypeScript, unless Phase 0 finds a better fit.
+- No test framework dependency for runtime code; use `node:test` with Node 24 native TypeScript type stripping. No `tsx` or other transpiler is required.
 
 ---
 

@@ -52,8 +52,12 @@ export async function scanFrames(dir: string, rel: string): Promise<FrameScan> {
   for (const entry of [...entries].sort((a, b) => compareNames(a.name, b.name))) {
     if (entry.isDirectory()) continue
     if (!entry.name.endsWith(".txt") && !entry.name.endsWith(".ans")) continue
-    const file = path.join(dir, entry.name)
     const fileRel = joinRel(rel, entry.name)
+    const file = safeResolve(dir, entry.name)
+    if (file === null) {
+      errors.push(error(fileRel, "path", `${fileRel}: resolves outside the pack root`))
+      continue
+    }
     let size: number
     try {
       const fileInfo = await stat(file)
@@ -123,6 +127,11 @@ async function loadFramePack(
     }
     frames.push(parsed.grid)
   }
+  if (errors.length > 100) {
+    const more = errors.length - 100
+    errors.length = 100
+    errors.push(error(rel, "frame", `...and ${more} more errors; fix the first ones and validate again`))
+  }
   if (errors.length > 0) return fail(errors)
 
   const sidecarWarnings: string[] = []
@@ -132,7 +141,12 @@ async function loadFramePack(
       const sidecar = scan.frames[index].replace(/\.txt$/, ".ans")
       if (!available.has(sidecar)) continue
       const sidecarRel = joinRel(rel, sidecar)
-      const read = await readTextFile(path.join(dir, sidecar), sidecarRel, CAPS.frameBytes)
+      const sidecarPath = safeResolve(dir, sidecar)
+      if (sidecarPath === null) {
+        errors.push(error(sidecarRel, "path", `${sidecarRel}: resolves outside the pack root`))
+        continue
+      }
+      const read = await readTextFile(sidecarPath, sidecarRel, CAPS.frameBytes)
       if (read.error !== undefined) {
         errors.push(read.error)
         continue
@@ -184,6 +198,9 @@ async function loadCanvasPack(
   const sidecarWarnings: string[] = []
   const sidecarRel = rel.replace(/\.txt$/, ".ans")
   const sidecarAbs = safeResolve(root, sidecarRel)
+  if (sidecarAbs === null) {
+    return fail([error(sidecarRel, "path", `${sidecarRel}: resolves outside the pack root`)])
+  }
   if (sidecarAbs !== null) {
     const size = await fileSize(sidecarAbs)
     if (size !== null) {

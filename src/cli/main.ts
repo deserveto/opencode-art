@@ -170,6 +170,14 @@ function requirePositional(positionals: readonly string[], index: number, usage:
   return value
 }
 
+function safeText(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, (char) => `\\x${char.charCodeAt(0).toString(16).padStart(2, "0")}`)
+}
+
+function formatError(error: { file: string; line?: number; message: string }): string {
+  return `${safeText(error.file)}${error.line ? `:${error.line}` : ""}: ${safeText(error.message)}`
+}
+
 async function commandInit(positionals: readonly string[], flags: ReadonlyMap<string, FlagValue>): Promise<number> {
   checkFlags(flags, ["force"])
   const dir = path.resolve(expandHome(requirePositional(positionals, 0, "opencode-art init <dir> [--force]")))
@@ -179,7 +187,16 @@ async function commandInit(positionals: readonly string[], flags: ReadonlyMap<st
       `folder "${id}" is not a valid pack id. Rename it to lowercase letters, digits, "_" or "-", starting with a letter or digit.`,
     )
   }
-  await prepareOutput(dir, flagBool(flags, "force"))
+  const force = flagBool(flags, "force")
+  if (await exists(dir)) {
+    const entries = await readdir(dir)
+    if (entries.length > 0 && !force) {
+      throw new CliError(`"${dir}" is not empty; use --force to replace it`)
+    }
+    await rm(path.join(dir, "frames"), { recursive: true, force: true })
+    await rm(path.join(dir, "canvas.ans"), { force: true })
+  }
+  await mkdir(dir, { recursive: true })
 
   const lines = [
     "                                        ",
@@ -228,10 +245,10 @@ async function commandInit(positionals: readonly string[], flags: ReadonlyMap<st
 
   const errors = await validatePackDir(dir)
   if (errors.length > 0) {
-    for (const error of errors) console.error(`${error.file}${error.line ? `:${error.line}` : ""}: ${error.message}`)
+    for (const error of errors) console.error(formatError(error))
     return 1
   }
-  console.log(`Created pack "${id}" in ${dir}`)
+  console.log(`Created pack "${safeText(id)}" in ${safeText(dir)}`)
   return 0
 }
 
@@ -240,10 +257,10 @@ async function commandValidate(positionals: readonly string[], flags: ReadonlyMa
   const dir = path.resolve(expandHome(requirePositional(positionals, 0, "opencode-art validate <dir>")))
   const errors = await validatePackDir(dir)
   if (errors.length === 0) {
-    console.log(`${dir}: valid`)
+    console.log(`${safeText(dir)}: valid`)
     return 0
   }
-  for (const error of errors) console.log(`${error.file}${error.line ? `:${error.line}` : ""}: ${error.message}`)
+  for (const error of errors) console.log(formatError(error))
   return 1
 }
 
@@ -262,7 +279,7 @@ async function commandPreview(positionals: readonly string[], flags: ReadonlyMap
   const dir = path.resolve(expandHome(requirePositional(positionals, 0, "opencode-art preview <dir> [--frame N] [--width N]")))
   const loaded = await loadPack(dir)
   if (!loaded.ok) {
-    for (const error of loaded.error) console.log(`${error.file}${error.line ? `:${error.line}` : ""}: ${error.message}`)
+    for (const error of loaded.error) console.log(formatError(error))
     return 1
   }
   const frame = clampIndex(parseInteger(flags, "frame", 0, -1_000_000, 1_000_000), loaded.value.frames.length)
@@ -308,7 +325,15 @@ async function bakeScene(
       const detail = result.stderr.trim().split("\n").filter(Boolean).slice(-3).join("\n")
       throw new CliError(`scene failed${detail ? `: ${detail}` : ""}`)
     }
-    const raw = JSON.parse(await readFile(output, "utf8")) as SceneOutput
+    const outputInfo = await stat(output).catch(() => null)
+    if (!outputInfo) throw new CliError("scene produced no output; it exited without writing frames")
+    if (outputInfo.size > 64 * 1024 * 1024) throw new CliError("scene output is larger than 64 MB; reduce the grid or frames")
+    let raw: SceneOutput
+    try {
+      raw = JSON.parse(await readFile(output, "utf8")) as SceneOutput
+    } catch (error) {
+      throw new CliError(`scene bake failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
     if (!raw.meta || !Array.isArray(raw.frames) || raw.frames.length === 0) throw new CliError("scene produced no frames")
     if (raw.frames.length > CAPS.frames) throw new CliError(`scene produced ${raw.frames.length} frames; the cap is ${CAPS.frames}`)
     if (raw.meta.cols * raw.meta.rows * raw.frames.length > SCENE_BUDGET_CELLS) {
@@ -495,12 +520,12 @@ async function commandBake(positionals: readonly string[], flags: ReadonlyMap<st
 
   const errors = await validatePackDir(out)
   if (errors.length > 0) {
-    for (const error of errors) console.error(`${error.file}${error.line ? `:${error.line}` : ""}: ${error.message}`)
+    for (const error of errors) console.error(formatError(error))
     return 1
   }
   console.log(
     `Baked ${frames.length} ${outputKind === "canvas" ? "canvas" : `frame${frames.length === 1 ? "" : "s"}`} ` +
-      `(${actualCols}x${actualRows}, ${actualFps} fps${hasColor ? ", color" : ", mono"}) into ${out} as "${id}"`,
+      `(${actualCols}x${actualRows}, ${actualFps} fps${hasColor ? ", color" : ", mono"}) into ${safeText(out)} as "${safeText(id)}"`,
   )
   return 0
 }
@@ -526,10 +551,10 @@ export async function main(argv: readonly string[]): Promise<number> {
     }
   } catch (error) {
     if (error instanceof CliError) {
-      console.error(`${BIN}: ${error.message}`)
+      console.error(`${BIN}: ${safeText(error.message)}`)
       return error.code
     }
-    console.error(`${BIN}: ${error instanceof Error ? error.message : String(error)}`)
+    console.error(`${BIN}: ${safeText(error instanceof Error ? error.message : String(error))}`)
     return 2
   }
 }

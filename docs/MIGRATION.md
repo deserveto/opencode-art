@@ -40,8 +40,15 @@ Local checkout while developing on Windows:
 }
 ```
 
-Use an absolute path. Remove the `ascii-bg` entry while testing so only one
-background renders. Restart OpenCode.
+The server part (authoring skill) loads from the plugins folder; link the
+checkout there:
+
+```powershell
+New-Item -ItemType Junction -Path "$HOME/.config/opencode/plugins/opencode-art" -Target "C:/dev/opencode-art"
+```
+
+Use an absolute path. Remove the `ascii-bg` entry and move its folder out of
+`plugins/` while testing so only one background renders. Restart OpenCode.
 
 What carries over:
 

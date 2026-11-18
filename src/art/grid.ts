@@ -44,6 +44,7 @@ const WIDE_RANGES: readonly (readonly [number, number])[] = [
   [0x2e80, 0x303e],
   [0x3041, 0x33ff],
   [0x3400, 0x4dbf],
+  [0x4dc0, 0x4dff],
   [0x4e00, 0x9fff],
   [0xa000, 0xa4cf],
   [0xa960, 0xa97f],
@@ -99,13 +100,17 @@ export function parseGrid(
   if (body.endsWith("\n")) body = body.slice(0, -1)
   const lines = body.split("\n")
 
-  if (lines.length !== rows) {
-    errors.push({ file, code: "frame", message: `expected ${rows} rows, found ${lines.length}` })
+  const lineCount = lines.length
+  if (lineCount !== rows) {
+    errors.push({ file, code: "frame", message: `expected ${rows} rows, found ${lineCount}` })
   }
-  for (let row = 0; row < lines.length; row++) {
+  let reported = 0
+  const limit = Math.min(lineCount, rows)
+  outer: for (let row = 0; row < limit; row++) {
     const line = lines[row]
     if (line.length !== cols) {
       errors.push({ file, line: row + 1, code: "frame", message: `expected ${cols} columns, found ${line.length}` })
+      if (++reported >= 50) break outer
     }
     for (const char of line) {
       if (!isWidthOne(char)) {
@@ -115,10 +120,12 @@ export function parseGrid(
           code: "frame",
           message: `invalid character ${describeChar(char)}: every cell must be one width-1 printable character`,
         })
+        if (++reported >= 50) break outer
         break
       }
     }
   }
+  if (reported >= 50) errors.push({ file, code: "frame", message: "too many errors in this file; fix the first ones and validate again" })
   if (errors.length > 0) return { errors }
   return { grid: { cols, rows, chars: lines.join(""), colors: null }, errors }
 }

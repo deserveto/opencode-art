@@ -42,6 +42,7 @@ function colorAt(grid: Grid, style: ResolvedStyle, ramp: string, x: number, y: n
     const g = grid.colors[index + 1]
     const b = grid.colors[index + 2]
     if (r === undefined || g === undefined || b === undefined) return null
+    if (r === 0 && g === 0 && b === 0) return null
     return [r, g, b, 255]
   }
   if (style.stops.length === 0) return null
