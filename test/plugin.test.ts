@@ -170,3 +170,49 @@ test("setPack persists and unknown ids get close matches", async () => {
     await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
   }
 })
+
+test("an invalid project settings field falls back without wiping the file", async () => {
+  const box = await harness()
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = box.configRoot
+  try {
+    await writeCanvasPack(box.projectRoot, "fool", 4, 2, grid(4, 2))
+    await writeFile(
+      path.join(box.projectRoot, ".opencode", "art.json"),
+      JSON.stringify({ enabled: "yes", pack: "fool", fps: 999 }),
+    )
+    box.state = await createArtState(box.context)
+    assert.equal(box.state.enabled(), true)
+    assert.equal(box.state.activeId(), "fool")
+    assert.equal(box.state.fps(), 5)
+    assert.ok(box.toasts.some((toast) => /enabled must be true or false|fps must be an integer/.test(toast.message)))
+  } finally {
+    box.state?.dispose()
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
+  }
+})
+
+test("reloading a pack that became invalid keeps the last good frames", async () => {
+  const box = await harness()
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = box.configRoot
+  try {
+    await writeCanvasPack(box.projectRoot, "fool", 4, 2, grid(4, 2))
+    box.state = await createArtState(box.context)
+    assert.equal(box.state.pack()?.frames[0]?.chars, "abcdbcde")
+
+    await writeFile(path.join(box.projectRoot, ".opencode", "arts", "fool", "canvas.txt"), "bad\n")
+    await box.state.reload()
+
+    assert.equal(box.state.pack()?.frames[0]?.chars, "abcdbcde")
+    assert.equal(box.state.activeId(), "fool")
+    assert.ok(box.state.problems().length > 0)
+  } finally {
+    box.state?.dispose()
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
+  }
+})

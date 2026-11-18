@@ -24,6 +24,14 @@ function ArtLayer(props: { readonly context: Context; readonly state: ArtState }
     setHome(props.context.ui.router.current().type === "home")
   })
 
+  // Re-resolve colors when the host swaps the active theme. The reads are
+  // cheap and a no-op when the context fields are not reactive.
+  createEffect(() => {
+    void props.context.themeMode
+    void props.context.theme.text.base
+    props.state.refreshTheme()
+  })
+
   return (
     <box
       position="absolute"
@@ -64,28 +72,38 @@ export default Plugin.define({
       return
     }
 
-    context.keymap.layer(() => ({
-      mode: "global",
-      commands: [
-        {
-          id: "opencode-art.art",
-          title: "ASCII art",
-          description: "Browse, select, and configure the animated ASCII background",
-          group: "Art",
-          slash: { name: "art", arguments: true },
-          run: (input) => runArtCommand(context, state, input),
-        },
-      ],
-    }))
+    try {
+      context.keymap.layer(() => ({
+        mode: "global",
+        commands: [
+          {
+            id: "opencode-art.art",
+            title: "ASCII art",
+            description: "Browse, select, and configure the animated ASCII background",
+            group: "Art",
+            slash: { name: "art", arguments: true },
+            run: (input) => runArtCommand(context, state, input),
+          },
+        ],
+      }))
 
-    const removeSlot = context.ui.slot({
-      append: "app",
-      render: () => <ArtLayer context={context} state={state} />,
-    })
+      const removeSlot = context.ui.slot({
+        append: "app",
+        render: () => <ArtLayer context={context} state={state} />,
+      })
 
-    return () => {
-      removeSlot()
+      return () => {
+        removeSlot()
+        state.dispose()
+      }
+    } catch (error) {
       state.dispose()
+      context.ui.toast.show({
+        title: "opencode-art",
+        message: `Art could not start: ${message(error)}`,
+        variant: "error",
+        duration: 8000,
+      })
     }
   },
 })

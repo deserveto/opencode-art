@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode/plugin/tui"
 import { homedir } from "node:os"
 import path from "node:path"
-import { createSignal, type Accessor, type Setter } from "solid-js"
+import { createSignal, type Accessor } from "solid-js"
 import type { Pack, PackCandidate, PackError, PackProblem, Result, StyleName } from "../art/types.ts"
 import { discoverPacks, loadCandidate, loadPack, validatePackDir } from "../art/index.ts"
 import { detectCapabilities, resolveStyle } from "../render/index.ts"
@@ -369,7 +369,12 @@ async function createState(context: Context): Promise<ArtState> {
   async function setFpsValue(value: number): Promise<void> {
     const clamped = Math.min(30, Math.max(1, Math.round(value)))
     await store.setFps(clamped)
-    setFps(clamped)
+    const effective = store.effective().fps ?? current?.manifest.fps ?? clamped
+    setFps(effective)
+    if (effective !== clamped) {
+      notify(`FPS is set to ${effective} by this project's .opencode/art.json.`, "warning")
+      return
+    }
     notify(
       clamped === value ? `FPS: ${clamped}` : `FPS clamped to ${clamped} (1–30).`,
       clamped === value ? "success" : "warning",
@@ -456,5 +461,3 @@ async function createState(context: Context): Promise<ArtState> {
 export async function createArtState(context: Context): Promise<ArtState> {
   return createState(context)
 }
-
-export type { Setter }

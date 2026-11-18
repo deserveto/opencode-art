@@ -28,8 +28,12 @@ export default Plugin.define({
     } catch {
       return
     }
-    await context.skill.transform((editor) => {
-      editor.add(embeddedSkill(path, content))
-    })
+    try {
+      await context.skill.transform((editor) => {
+        editor.add(embeddedSkill(path, content))
+      })
+    } catch (error) {
+      console.error(`[opencode-art] could not register the authoring skill: ${error instanceof Error ? error.message : String(error)}`)
+    }
   },
 })

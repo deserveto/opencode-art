@@ -52,7 +52,7 @@ renders.
 |                                                                 |
 | Enabled: yes   Style: mono   FPS: 10   Frames: 60               |
 | Problems                                                        |
-| rain: art.json — expected 8 rows, found 7                       |
+| rain: art.json: expected 8 rows, found 7                        |
 | Up/Down select · Enter apply · s style · Left/Right fps · ...   |
 | Create art by asking the agent in chat · ~/.config/opencode/arts |
 +-----------------------------------------------------------------+

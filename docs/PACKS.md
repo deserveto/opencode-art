@@ -168,8 +168,8 @@ Parameter rules:
 | `axis` | `x` | `x` or `y` |
 
 Colors move with their cells for `wave` and `drift`. Effects are deterministic
-for the same pack, time, and fps. Unknown effect types and missing parameters
-do not throw; missing values use the defaults above.
+for the same pack, time, and fps. Missing parameters use the defaults above. An
+unknown effect type is a validation error.
 
 ## Color sidecars
 
@@ -196,10 +196,11 @@ Rules:
   frame must have one with the same basename.
 - `canvas.ans` follows the same rule for a canvas.
 - A sidecar has at most 4096 unique colors. The bundled Fool uses 64.
-- A sidecar can use fewer colors than cells. Uncolored cells use the current
-  style color.
-- A malformed sidecar rejects the pack. A stripped unsupported sequence only
-  warns.
+- A cell with no preceding foreground sequence has no sidecar color. In
+  `original` style it renders black, so color visible cells explicitly or reset
+  to a color after a space.
+- A sidecar whose text does not match its frame, or that exceeds the color cap,
+  rejects the pack. Unsupported escape sequences are stripped with a warning.
 
 ## Caps
 

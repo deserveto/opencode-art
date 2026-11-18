@@ -29,6 +29,9 @@ From Git instead:
 opencode plugin add <repository-url>
 ```
 
+If the npm package is not published yet, use the Git form or the local
+development flow below.
+
 The package exports `./tui` for the TUI part and `.` for the server part, which
 registers the authoring skill. OpenCode resolves both from the installed
 package.
@@ -46,7 +49,10 @@ Point the TUI config at the repository instead of an installed package. In
 }
 ```
 
-Use an absolute path. On Linux and macOS the config file is usually
+Use an absolute path to the repository. The entry shape is
+`{ "package": "..." }`; the existing development setup keeps plugins under
+`~/.config/opencode/plugins/` and uses `{ "package": "./plugins/<name>" }`.
+On Linux and macOS the config file is usually
 `~/.config/opencode/cli.json`; on Windows it is
 `%USERPROFILE%\.config\opencode\cli.json`. Restart or reload OpenCode after
 changing the file.
