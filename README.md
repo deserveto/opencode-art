@@ -11,7 +11,7 @@ sessions draw nothing, and art sits behind the host UI at `zIndex -1`.
 - Target: OpenCode 2.3.2, OpenTUI 0.8.4
 - License: MIT for code, CC BY 4.0 for bundled art
 
-Status: pre-release (0.1.1). The pack format, player, color styles, effects,
+Status: pre-release (0.1.2). The pack format, player, color styles, effects,
 commands, dialog, settings, watch loop, and authoring CLI are implemented. The
 CLI is author-time only; see [docs/AUTHORING.md](docs/AUTHORING.md).
 

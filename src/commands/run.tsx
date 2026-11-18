@@ -2,7 +2,6 @@
 import type { Plugin } from "@opencode/plugin/tui"
 import { STYLE_NAMES, type StyleName } from "../art/types.ts"
 import type { ArtState } from "../plugin/state.ts"
-import { debug } from "../plugin/debug.ts"
 import { ArtDialog } from "./dialog.tsx"
 import { parseArtCommand } from "./parse.ts"
 
@@ -10,16 +9,12 @@ type Context = Plugin.Context
 
 export function openArtDialog(context: Context, state: ArtState): void {
   try {
-    debug("openArtDialog start")
     state.refreshTheme()
     context.ui.dialog.set({ size: "xlarge", centered: true })
-    context.ui.dialog.show(() => {
-      debug("art dialog element invoked")
-      return <ArtDialog state={state} theme={context.theme} close={() => context.ui.dialog.clear()} />
-    })
-    debug("openArtDialog shown")
+    context.ui.dialog.show(() => (
+      <ArtDialog state={state} theme={context.theme} close={() => context.ui.dialog.clear()} />
+    ))
   } catch (error) {
-    debug(`openArtDialog failed: ${error instanceof Error ? error.message : String(error)}`)
     context.ui.toast.show({
       message: `Could not open the art dialog: ${error instanceof Error ? error.message : String(error)}`,
       variant: "error",
@@ -63,7 +58,6 @@ async function safeAlert(context: Context, title: string, message: string): Prom
 }
 
 export async function runArtCommand(context: Context, state: ArtState, input?: string): Promise<void> {
-  debug(`runArtCommand input=${String(input)}`)
   const command = parseArtCommand(input)
   const toast = (message: string, variant: "info" | "success" | "warning" | "error" = "info") =>
     context.ui.toast.show({ message, variant })

@@ -6,12 +6,10 @@ import { runArtCommand } from "./src/commands/run.tsx"
 import { ArtRenderable } from "./src/render/index.ts"
 import { themeColors } from "./src/plugin/host.ts"
 import { createArtState, type ArtState } from "./src/plugin/state.ts"
-import { debug } from "./src/plugin/debug.ts"
 
 type Context = Plugin.Context
 
 extend({ "art-background": ArtRenderable })
-debug("tui module loaded")
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -33,7 +31,6 @@ function ArtLayer(props: { readonly context: Context; readonly state: ArtState }
     props.state.refreshTheme()
   })
 
-  debug("art layer render")
   return (
     <box position="absolute" left={0} top={0} width="100%" height="100%" zIndex={-1}>
       <art-background
@@ -53,11 +50,9 @@ function ArtLayer(props: { readonly context: Context; readonly state: ArtState }
 export default Plugin.define({
   id: "opencode-art.tui",
   async setup(context) {
-    debug("setup start")
     let state: ArtState
     try {
       state = await createArtState(context)
-      debug("state ready")
     } catch (error) {
       context.ui.toast.show({
         title: "opencode-art",
@@ -76,7 +71,6 @@ export default Plugin.define({
       const remove = context.ui.slot({
         append: "app",
         render: () => {
-          debug("app slot render")
           context.keymap.layer(() => ({
             mode: "global",
             commands: [
@@ -91,15 +85,6 @@ export default Plugin.define({
               },
             ],
           }))
-          debug("command layer registered")
-          setTimeout(() => {
-            try {
-              const ids = context.keymap.commands().map((command) => command.id)
-              debug(`reachable commands=${ids.length} hasArt=${ids.includes("opencode-art.art")}`)
-            } catch (error) {
-              debug(`reachable command check failed: ${message(error)}`)
-            }
-          }, 1000)
           return (
             <Show when={context.ui.router.current().type === "home"}>
               <ArtLayer context={context} state={state} />
@@ -108,29 +93,11 @@ export default Plugin.define({
         },
       })
 
-      setTimeout(() => {
-        debug("auto test: plain dialog")
-        context.ui.dialog.show(() => {
-          debug("plain dialog element invoked")
-          return <text>plain dialog</text>
-        })
-        setTimeout(() => {
-          context.ui.dialog.clear()
-          debug("auto test: art dialog")
-          void runArtCommand(context, state)
-          setTimeout(() => {
-            debug("auto test: closing dialog")
-            context.ui.dialog.clear()
-          }, 2500)
-        }, 2000)
-      }, 1500)
-
       return () => {
         remove()
         state.dispose()
       }
     } catch (error) {
-      debug(`setup failed: ${message(error)}`)
       state.dispose()
       context.ui.toast.show({
         title: "opencode-art",
