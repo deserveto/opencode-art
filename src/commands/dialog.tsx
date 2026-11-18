@@ -3,7 +3,7 @@ import { RGBA } from "@opentui/core"
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import type { ResolvedTheme } from "@opencode/theme/tui"
-import type { Pack, PackCandidate, StyleName } from "../art/types.ts"
+import type { Pack, StyleName } from "../art/types.ts"
 import type { ArtState } from "../plugin/state.ts"
 import { debug } from "../plugin/debug.ts"
 import { buildPreview } from "./preview.ts"
@@ -11,6 +11,7 @@ import { buildPreview } from "./preview.ts"
 interface DialogProps {
   readonly state: ArtState
   readonly theme: ResolvedTheme
+  readonly formatPath: (value: string) => string
   readonly close: () => void
 }
 
@@ -23,6 +24,7 @@ export function ArtDialog(props: DialogProps) {
   const [selected, setSelected] = createSignal(0)
   const [previewPack, setPreviewPack] = createSignal<Pack | null>(null)
   const [previewError, setPreviewError] = createSignal<string | null>(null)
+  const [previewLoading, setPreviewLoading] = createSignal(false)
   const [reloadTick, setReloadTick] = createSignal(0)
   const [note, setNote] = createSignal<string | null>(null)
   const colors = new Map<string, RGBA>()
@@ -39,11 +41,14 @@ export function ArtDialog(props: DialogProps) {
     debug(`preview effect candidate=${candidate?.id ?? "none"} list=${list().length} selected=${selectedIndex()}`)
     if (!candidate) {
       setPreviewPack(null)
+      setPreviewLoading(false)
       return
     }
+    setPreviewLoading(true)
     let live = true
     void props.state.load(candidate.id).then((result) => {
       if (!live) return
+      setPreviewLoading(false)
       debug(`preview load ok=${result.ok} id=${result.ok ? result.value.id : "err"} frames=${result.ok ? result.value.frames.length : 0}`)
       if (result.ok) {
         setPreviewPack(result.value)
@@ -64,13 +69,19 @@ export function ArtDialog(props: DialogProps) {
     return pack ? props.state.resolve(pack) : null
   })
 
+  // The host caps xlarge at 116 cells; subtract the dialog border and padding.
+  const dialogWidth = createMemo(() => Math.max(40, Math.min(112, dimensions().width - 6)))
+  const wide = createMemo(() => dialogWidth() >= 100)
   const previewSize = createMemo(() => {
     const pack = previewPack()
-    const width = Math.max(24, Math.min(64, Math.floor(dimensions().width * 0.55) - 34))
+    // Wide: 34-cell list, 1 gap, 4 cells of preview border/padding.
+    const room = wide() ? dialogWidth() - 43 : dialogWidth() - 8
+    const width = Math.max(20, Math.min(64, room))
+    const cap = wide() ? 22 : 14
     const height = pack
-      ? Math.max(6, Math.min(22, Math.round((pack.manifest.rows * width) / pack.manifest.cols)))
+      ? Math.max(6, Math.min(cap, Math.round((pack.manifest.rows * width) / pack.manifest.cols)))
       : 12
-    debug(`preview size terminal=${dimensions().width}x${dimensions().height} -> ${width}x${height}`)
+    debug(`preview size terminal=${dimensions().width}x${dimensions().height} dialog=${dialogWidth()} -> ${width}x${height}`)
     return { width, height }
   })
 
@@ -93,14 +104,6 @@ export function ArtDialog(props: DialogProps) {
     const value = RGBA.fromInts(color[0], color[1], color[2], color[3])
     colors.set(key, value)
     return value
-  }
-
-  function badges(candidate: PackCandidate): string {
-    let out = "mt"
-    if (candidate.manifest.palette?.length) out += "p"
-    const pack = previewPack()
-    if (pack?.id === candidate.id && pack.frames.some((frame) => frame.colors)) out += "o"
-    return out
   }
 
   function availableStyles(pack?: Pack | null): readonly StyleName[] {
@@ -222,8 +225,7 @@ export function ArtDialog(props: DialogProps) {
   return (
     <box
       flexDirection="column"
-      width="100%"
-      height="100%"
+      width={dialogWidth()}
       border
       borderStyle="rounded"
       borderColor={border}
@@ -232,8 +234,8 @@ export function ArtDialog(props: DialogProps) {
       padding={1}
       gap={1}
     >
-      <box flexDirection="row" flexGrow={1} gap={2}>
-        <box width={34} flexDirection="column">
+      <box flexDirection={wide() ? "row" : "column"} gap={1}>
+        <box width={wide() ? 34 : "100%"} flexDirection="column" flexShrink={0} overflow="hidden">
           <text fg={muted} wrapMode="none" truncate>
             Packs ({list().length}){active() ? ` · active: ${active()}` : ""}
           </text>
@@ -250,7 +252,6 @@ export function ArtDialog(props: DialogProps) {
                   </span>
                   {"  "}
                   {shortName(candidate.manifest.name)}
-                  <span style={{ fg: faint }}>{"  "}{badges(candidate)}</span>
                 </text>
               )}
             </For>
@@ -260,6 +261,7 @@ export function ArtDialog(props: DialogProps) {
           width={previewSize().width + 2}
           height={previewSize().height + 4}
           flexDirection="column"
+          flexShrink={0}
           border
           borderStyle="single"
           borderColor={border}
@@ -271,8 +273,12 @@ export function ArtDialog(props: DialogProps) {
             when={preview().length > 0}
             fallback={
               <box flexDirection="column">
-                <text fg={muted}>{previewError() ?? "Select a pack to preview it."}</text>
-                <text fg={faint}>{props.state.roots.globalArts}</text>
+                <text fg={muted}>
+                  {previewLoading() ? "Loading preview…" : (previewError() ?? "Select a pack to preview it.")}
+                </text>
+                <text fg={faint} wrapMode="none" truncate>
+                  {props.formatPath(props.state.roots.globalArts)}
+                </text>
               </box>
             }
           >
@@ -293,25 +299,28 @@ export function ArtDialog(props: DialogProps) {
         </box>
       </box>
 
-      <text fg={muted}>{status()}</text>
+      <text fg={muted} wrapMode="word">
+        {status()}
+      </text>
       <Show when={note()}>{(value: Accessor<string>) => <text fg={muted}>{value()}</text>}</Show>
       <Show when={props.state.problems().length > 0}>
         <box flexDirection="column">
           <text fg={props.theme.text.feedback.error.base}>Problems</text>
           <For each={props.state.problems().slice(0, 4)}>
             {(problem) => (
-              <text fg={faint}>
+              <text fg={faint} wrapMode="word">
                 {problem.id}: {problem.errors[0]?.file ?? "art.json"} — {problem.errors[0]?.message ?? "invalid"}
               </text>
             )}
           </For>
         </box>
       </Show>
-      <text fg={faint}>
-        Up/Down select · Enter apply · s style ({availableStyles().join("/")}) · Left/Right fps · e enabled · r reload ·
-        Esc close · * active · {capability()}
+      <text fg={faint} wrapMode="word">
+        Up/Down select · Enter apply · s style · Left/Right fps · e on/off · r reload · Esc close
       </text>
-      <text fg={faint}>Create art by asking the agent in chat · {props.state.roots.globalArts}</text>
+      <text fg={faint} wrapMode="word">
+        * active · {capability()} · Create art in chat · {props.formatPath(props.state.roots.globalArts)}
+      </text>
     </box>
   )
 }

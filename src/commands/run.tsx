@@ -13,7 +13,12 @@ export function openArtDialog(context: Context, state: ArtState): void {
     state.refreshTheme()
     // show() resets presentation to medium; apply the size after it opens.
     context.ui.dialog.show(() => (
-      <ArtDialog state={state} theme={context.theme} close={() => context.ui.dialog.clear()} />
+      <ArtDialog
+        state={state}
+        theme={context.theme}
+        formatPath={(value) => context.ui.format.path(value)}
+        close={() => context.ui.dialog.clear()}
+      />
     ))
     context.ui.dialog.set({ size: "xlarge", centered: true })
     debug("openArtDialog shown xlarge")
