@@ -5,7 +5,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import type { ResolvedTheme } from "@opencode/theme/tui"
 import type { Pack, StyleName } from "../art/types.ts"
 import type { ArtState } from "../plugin/state.ts"
-import { debug } from "../plugin/debug.ts"
+import { fitDialogWidth, previewBox } from "./layout.ts"
 import { buildPreview } from "./preview.ts"
 
 interface DialogProps {
@@ -38,7 +38,6 @@ export function ArtDialog(props: DialogProps) {
   createEffect(() => {
     reloadTick()
     const candidate = current()
-    debug(`preview effect candidate=${candidate?.id ?? "none"} list=${list().length} selected=${selectedIndex()}`)
     if (!candidate) {
       setPreviewPack(null)
       setPreviewLoading(false)
@@ -49,7 +48,6 @@ export function ArtDialog(props: DialogProps) {
     void props.state.load(candidate.id).then((result) => {
       if (!live) return
       setPreviewLoading(false)
-      debug(`preview load ok=${result.ok} id=${result.ok ? result.value.id : "err"} frames=${result.ok ? result.value.frames.length : 0}`)
       if (result.ok) {
         setPreviewPack(result.value)
         setPreviewError(null)
@@ -69,32 +67,18 @@ export function ArtDialog(props: DialogProps) {
     return pack ? props.state.resolve(pack) : null
   })
 
-  // The host caps xlarge at 116 cells; subtract the dialog border and padding.
-  const dialogWidth = createMemo(() => Math.max(40, Math.min(112, dimensions().width - 6)))
+  const dialogWidth = createMemo(() => fitDialogWidth(dimensions().width))
   const wide = createMemo(() => dialogWidth() >= 100)
   const previewSize = createMemo(() => {
     const pack = previewPack()
-    // Wide: 34-cell list, 1 gap, 4 cells of preview border/padding.
-    const room = wide() ? dialogWidth() - 43 : dialogWidth() - 8
-    const width = Math.max(20, Math.min(64, room))
-    const cap = wide() ? 22 : 14
-    const height = pack
-      ? Math.max(6, Math.min(cap, Math.round((pack.manifest.rows * width) / pack.manifest.cols)))
-      : 12
-    debug(`preview size terminal=${dimensions().width}x${dimensions().height} dialog=${dialogWidth()} -> ${width}x${height}`)
-    return { width, height }
+    return previewBox(dimensions().width, pack ? { cols: pack.manifest.cols, rows: pack.manifest.rows } : null)
   })
 
   const preview = createMemo(() => {
     const pack = previewPack()
-    if (!pack) {
-      debug("preview memo no pack")
-      return []
-    }
+    if (!pack) return []
     const size = previewSize()
-    const built = buildPreview(pack, resolved() ?? props.state.resolve(pack), size.width, size.height)
-    debug(`preview memo pack=${pack.id} size=${size.width}x${size.height} lines=${built.length}`)
-    return built
+    return buildPreview(pack, resolved() ?? props.state.resolve(pack), size.width, size.height)
   })
 
   function rgba(color: readonly [number, number, number, number]): RGBA {

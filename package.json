@@ -1,6 +1,6 @@
 {
   "name": "opencode-art",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Animated ASCII art background for the OpenCode home screen.",
   "type": "module",
   "license": "MIT",

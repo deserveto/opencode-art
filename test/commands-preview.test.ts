@@ -3,6 +3,7 @@ import test from "node:test"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { loadPack } from "../src/art/load.ts"
+import { fitDialogWidth, previewBox } from "../src/commands/layout.ts"
 import { buildPreview, previewText } from "../src/commands/preview.ts"
 import type { ResolvedStyle } from "../src/render/types.ts"
 
@@ -13,6 +14,19 @@ const mono: ResolvedStyle = {
   stops: [[255, 255, 255, 255]],
   original: false,
 }
+
+test("fitDialogWidth stays inside the host xlarge bounds", () => {
+  assert.equal(fitDialogWidth(188), 112)
+  assert.equal(fitDialogWidth(120), 112)
+  assert.equal(fitDialogWidth(80), 74)
+  assert.equal(fitDialogWidth(40), 40)
+})
+
+test("previewBox fits wide and stacked dialogs", () => {
+  assert.deepEqual(previewBox(188, { cols: 180, rows: 50 }), { width: 64, height: 18, wide: true })
+  assert.deepEqual(previewBox(80, { cols: 180, rows: 50 }), { width: 64, height: 14, wide: false })
+  assert.deepEqual(previewBox(80, null), { width: 64, height: 12, wide: false })
+})
 
 test("buildPreview fits a pack frame to the requested box", async () => {
   const result = await loadPack(path.join(root, "frames", "fool"))
