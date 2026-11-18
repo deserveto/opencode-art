@@ -5,6 +5,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import type { ResolvedTheme } from "@opencode/theme/tui"
 import type { Pack, PackCandidate, StyleName } from "../art/types.ts"
 import type { ArtState } from "../plugin/state.ts"
+import { debug } from "../plugin/debug.ts"
 import { buildPreview } from "./preview.ts"
 
 interface DialogProps {
@@ -18,6 +19,7 @@ function shortName(name: string): string {
 }
 
 export function ArtDialog(props: DialogProps) {
+  debug("ArtDialog render")
   const dimensions = useTerminalDimensions()
   const [selected, setSelected] = createSignal(0)
   const [previewPack, setPreviewPack] = createSignal<Pack | null>(null)
