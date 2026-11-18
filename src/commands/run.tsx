@@ -12,9 +12,10 @@ export function openArtDialog(context: Context, state: ArtState): void {
     debug("openArtDialog start")
     state.refreshTheme()
     context.ui.dialog.set({ size: "xlarge", centered: true })
-    context.ui.dialog.show(() => (
-      <ArtDialog state={state} theme={context.theme} close={() => context.ui.dialog.clear()} />
-    ))
+    context.ui.dialog.show(() => {
+      debug("art dialog element invoked")
+      return <ArtDialog state={state} theme={context.theme} close={() => context.ui.dialog.clear()} />
+    })
     debug("openArtDialog shown")
   } catch (error) {
     debug(`openArtDialog failed: ${error instanceof Error ? error.message : String(error)}`)
