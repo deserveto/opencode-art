@@ -176,7 +176,7 @@ warning.
 |---|---|
 | `mono` | Theme `text.faint`; one color, always available. |
 | `theme` | Three theme stops: `text.faint`, `text.muted`, `text.base`. |
-| `palette` | Pack `palette` stops, ordered low to high brightness. |
+| `palette` | Pack `palette` stops, ordered low to high brightness; falls back to `theme` when the pack has none. |
 | `original` | Per-cell RGB from `.ans` sidecars. |
 
 `original` needs color sidecars and a terminal with at least 256 colors. On a

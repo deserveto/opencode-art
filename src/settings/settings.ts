@@ -124,7 +124,9 @@ export function createSettingsStore(host: SettingsHost, initialProject: Settings
 
   function globalValue(): Settings {
     // A foreign or older TUI can write invalid values; sanitize on read.
-    return { ...parseSettings(host.readGlobal()).settings, ...pending }
+    const parsed = parseSettings(host.readGlobal())
+    for (const warning of parsed.warnings) host.onError(warning)
+    return { ...parsed.settings, ...pending }
   }
 
   function clearPending(field: keyof Settings, value: unknown): void {

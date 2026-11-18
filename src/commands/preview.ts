@@ -22,7 +22,7 @@ export function buildPreview(pack: Pack, style: ResolvedStyle, cols: number, row
     let color: RGBA4 | null = null
     for (let x = 0; x < grid.cols; x++) {
       const next = colorAt(grid, style, ramp, x, y)
-      if (runs.length > 0 && !sameColor(color, next)) {
+      if (text.length > 0 && !sameColor(color, next)) {
         runs.push({ text, color })
         text = ""
       }
@@ -51,7 +51,8 @@ function colorAt(grid: Grid, style: ResolvedStyle, ramp: string, x: number, y: n
   return style.stops[index] ?? null
 }
 
-function sameColor(a: RGBA4 | null, b: RGBA4 | null): boolean {  if (a === null || b === null) return a === b
+function sameColor(a: RGBA4 | null, b: RGBA4 | null): boolean {
+  if (a === null || b === null) return a === b
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
 }
 

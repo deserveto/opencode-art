@@ -69,7 +69,7 @@ theme faint color; pure black is treated the same way.
 |---|---|---|
 | `mono` | Nothing | Theme `text.faint`. |
 | `theme` | Nothing | Three theme stops: `text.faint`, `text.muted`, `text.base`, quantized for the terminal. |
-| `palette` | Nothing, but a pack palette gives the authored colors | Pack palette stops or theme stops, quantized for the terminal. |
+| `palette` | A pack `palette`; falls back otherwise | Pack palette stops, quantized for the terminal; `theme` with a reason when the pack has none. |
 | `original` | `.ans` sidecars and 256+ colors | Per-cell sidecar RGB, quantized when needed. |
 
 `original` falls back in this order:
@@ -85,9 +85,9 @@ toast explains the reason once per pack and request.
 ### Light and dark themes
 
 `mono` and `theme` read the active theme, so they follow light and dark mode
-automatically. `palette` uses the pack palette when one exists and theme stops
-otherwise. A pack palette is fixed by the author and does not change with the
-theme.
+automatically. `palette` uses the pack palette when one exists and falls back
+to `theme`, with a reason, otherwise. A pack palette is fixed by the author
+and does not change with the theme.
 
 `original` colors are authored against a background. On a light theme the
 resolver samples the sidecar colors and checks them against the theme

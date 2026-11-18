@@ -33,10 +33,11 @@ test("palette uses the pack palette", () => {
   ])
 })
 
-test("palette without a pack palette uses a theme ramp", () => {
+test("palette without a pack palette falls back to theme with a reason", () => {
   const style = resolveStyle("palette", makePack(), RGB_CAPS, DARK_THEME)
-  assert.equal(style.effective, "palette")
+  assert.equal(style.effective, "theme")
   assert.deepEqual(style.stops, [DARK_THEME.faint, DARK_THEME.muted, DARK_THEME.base])
+  assert.equal(style.reason, "pack has no palette")
 })
 
 test("no color capability always degrades to mono with a reason", () => {

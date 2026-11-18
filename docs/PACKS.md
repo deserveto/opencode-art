@@ -120,9 +120,9 @@ Unknown top-level fields produce a warning and are ignored. They do not reject
 the pack.
 
 `defaultStyle` is only a default. The user setting overrides it globally, and a
-project `.opencode/art.json` overrides that. A pack with no `palette` still
-accepts `palette` style; it uses the theme stops. The dialog only offers
-`palette` for packs that declare a palette.
+project `.opencode/art.json` overrides that. A pack with no `palette` falls
+back to `theme` for `palette` style, with the reason shown in the status line
+and toasts. The dialog only offers `palette` for packs that declare a palette.
 
 ## Frames and canvas
 

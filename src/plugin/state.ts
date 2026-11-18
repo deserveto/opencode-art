@@ -254,8 +254,9 @@ async function createState(context: Context): Promise<ArtState> {
     if (excludeDir !== bundledDir) {
       const bundled = await loadBundledFool()
       if (bundled.ok) {
+        // The caller's toast already explains the substitution; the default
+        // Fool needs no announcement of its own.
         apply(bundled.value, "fool")
-        notify("Showing fool instead.", "warning")
         return true
       }
       deepProblems.set(bundledDir, { id: "fool", dir: bundledDir, scope: "bundled", errors: bundled.error })

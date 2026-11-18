@@ -37,6 +37,7 @@ node --test --test-name-pattern "original" "test/**/*.test.ts"
 |---|---|
 | `test/smoke.test.ts` | Shared constants are importable. |
 | `test/commands.test.ts` | `/art` argument parsing, case folding, missing arguments, unknown names. |
+| `test/commands-preview.test.ts` | Dialog width fitting and preview color-run grouping. |
 | `test/plugin.test.ts` | Pack selection, project overrides, fallback, persistence, reload behavior. |
 | `test/settings.test.ts` | Field-by-field settings validation, unsupported versions, precedence, failed global writes, live sync. |
 | `test/watch.test.ts` | Poll signatures, content changes, debounced reload, clean stop. |

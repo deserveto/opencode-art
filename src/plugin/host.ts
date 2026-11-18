@@ -50,7 +50,6 @@ export function themeColors(theme: ResolvedTheme): ThemeColors {
     faint: to4(theme.text.faint),
     muted: to4(theme.text.muted),
     base: to4(theme.text.base),
-    hue: to4(theme.text.base),
     background: to4(theme.background.base),
   }
 }

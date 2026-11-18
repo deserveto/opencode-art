@@ -138,11 +138,14 @@ export function resolveStyle(
 
   if (requested === "palette") {
     const palette = packPalette(pack)
-    const stops = palette.length >= 2 ? palette : themeStops(theme)
+    if (palette.length < 2) {
+      // Report what is on screen: theme stops under a palette label is a lie.
+      return degraded(requested, "pack has no palette", pack, capabilities, theme)
+    }
     return {
       requested,
       effective: "palette",
-      stops: quantizeStops(stops, capabilities),
+      stops: quantizeStops(palette, capabilities),
       original: false,
     }
   }

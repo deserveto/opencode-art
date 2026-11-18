@@ -65,7 +65,6 @@ export const DARK_THEME: ThemeColors = {
   faint: [110, 110, 125, 255],
   muted: [170, 170, 185, 255],
   base: [235, 235, 245, 255],
-  hue: [190, 150, 255, 255],
   background: [20, 20, 30, 255],
 }
 
@@ -73,7 +72,6 @@ export const LIGHT_THEME: ThemeColors = {
   faint: [150, 150, 150, 255],
   muted: [90, 90, 90, 255],
   base: [25, 25, 25, 255],
-  hue: [80, 40, 160, 255],
   background: [246, 246, 240, 255],
 }
 

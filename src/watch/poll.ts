@@ -10,7 +10,9 @@ export interface PollOptions {
 }
 
 const MAX_ENTRIES = 4000
-const MAX_DEPTH = 3
+// Entries up to six levels below each root are stat'ed, so a manifest may
+// point `frames` at a directory nested several levels deep.
+const MAX_DEPTH = 5
 
 async function scanDir(dir: string, depth: number, parts: string[]): Promise<void> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
@@ -28,7 +30,7 @@ async function scanDir(dir: string, depth: number, parts: string[]): Promise<voi
 
 /**
  * Directory mtimes alone miss edits inside a pack, so every entry is stat'ed
- * by name. Pack subdirectories are walked (up to a small depth) because a
+ * by name. Pack subdirectories are walked (six levels) because a
  * manifest may point `frames` at any relative directory, not only `frames/`.
  */
 export async function scanSignature(roots: readonly string[]): Promise<string> {

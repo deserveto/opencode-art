@@ -439,7 +439,6 @@ async function commandBake(positionals: readonly string[], flags: ReadonlyMap<st
   const envTimeout = Number(process.env.OPENCODE_ART_SCENE_TIMEOUT_MS)
   const timeoutMs = Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : timeoutSeconds * 1000
   if (!(await exists(input))) throw new CliError(`input "${input}" does not exist`)
-  await prepareOutput(out, flagBool(flags, "force"))
 
   const kind = sourceKind(input)
   const gridOptions: GridOptions = { cols, rows, ramp, aspect, invert: flagBool(flags, "invert"), dither, color: !mono }
@@ -480,13 +479,8 @@ async function commandBake(positionals: readonly string[], flags: ReadonlyMap<st
   const actualCols = frames[0]?.cols ?? cols
   const actualRows = frames[0]?.rows ?? rows
   const actualFps = sceneMeta?.fps ?? fps
-  const actualLoop = sceneMeta?.loop ?? loop
   if (frames.length > CAPS.frames) throw new CliError(`bake produced ${frames.length} frames; the cap is ${CAPS.frames}`)
   if (actualCols * actualRows * frames.length > SCENE_BUDGET_CELLS) {
-    throw new CliError("output is too large for the pack cap; reduce cols, rows, or loop")
-  }
-  const budgetFrames = sceneMeta ? frames.length : Math.round(actualLoop * actualFps)
-  if (outputKind === "frames" && budgetFrames * actualCols * actualRows > SCENE_BUDGET_CELLS) {
     throw new CliError("output is too large for the pack cap; reduce cols, rows, or loop")
   }
 
@@ -497,6 +491,9 @@ async function commandBake(positionals: readonly string[], flags: ReadonlyMap<st
   }
   if (!hasColor) palette = undefined
 
+  // Prepare late so a failed decode or a cap breach leaves no empty output
+  // directory behind.
+  await prepareOutput(out, flagBool(flags, "force"))
   const id = await attempt("could not write the pack", () =>
     writePack({
       dir: out,

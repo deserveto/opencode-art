@@ -23,7 +23,6 @@ export interface ThemeColors {
   readonly faint: RGBA4
   readonly muted: RGBA4
   readonly base: RGBA4
-  readonly hue: RGBA4
   readonly background: RGBA4
 }
 

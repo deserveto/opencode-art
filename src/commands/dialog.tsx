@@ -300,7 +300,7 @@ export function ArtDialog(props: DialogProps) {
         </box>
       </Show>
       <text fg={faint} wrapMode="word">
-        Up/Down select · Enter apply · s style · Left/Right fps · e on/off · r reload · Esc close
+        Up/Down select · Enter apply · s style · Left/Right fps · e on/off · r reload · Esc/q close
       </text>
       <text fg={faint} wrapMode="word">
         * active · {capability()} · Create art in chat · {props.formatPath(props.state.roots.globalArts)}

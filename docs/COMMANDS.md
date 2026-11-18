@@ -54,7 +54,7 @@ pack loads; a bad pack never partially renders.
 | Enabled: yes   Style: mono   FPS: 10   Frames: 60            |
 | Problems: rain: art.json: expected 8 rows, found 7           |
 | Up/Down select · Enter apply · s style · Left/Right fps      |
-| e enabled · r reload · Esc close · truecolor                 |
+| e enabled · r reload · Esc/q close · truecolor                 |
 | Create art by asking the agent in chat                       |
 | ~/.config/opencode/arts                                      |
 +--------------------------------------------------------------+
