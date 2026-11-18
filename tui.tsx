@@ -108,6 +108,15 @@ export default Plugin.define({
         },
       })
 
+      setTimeout(() => {
+        debug("auto test: opening dialog")
+        void runArtCommand(context, state)
+        setTimeout(() => {
+          debug("auto test: closing dialog")
+          context.ui.dialog.clear()
+        }, 3000)
+      }, 2000)
+
       return () => {
         remove()
         state.dispose()
