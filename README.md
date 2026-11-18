@@ -25,6 +25,10 @@ opencode plugin add https://github.com/deserveto/opencode-art
 
 Once it is on npm, `opencode plugin add opencode-art` works the same way.
 
+After `opencode plugin update`, quit OpenCode completely and relaunch it. A
+running TUI does not hot-swap a package's TUI code, even though the server part
+reloads in place.
+
 The package exports `./tui` for the TUI part and `.` for the server part, which
 registers the authoring skill. OpenCode resolves both from the installed
 package.
@@ -255,6 +259,7 @@ Coming from the old `ascii-bg` plugin: [docs/MIGRATION.md](docs/MIGRATION.md).
 |---|---|
 | No art on the home screen | Run `/art on`. Check that your terminal has color or that `mono` is acceptable. |
 | A pack is missing | Confirm `<arts>/<id>/art.json` exists and the folder name matches `id`. Run `/art reload`. |
+| `/art` is missing after an update | The TUI is still the old process. | Quit OpenCode completely and relaunch it. |
 | A pack is listed under Problems | Run `/art validate <id>` or `/art validate <path>` and fix the reported file and line. |
 | Wrong shape or shifted art | Every line must be exactly `cols` characters and every frame exactly `rows` lines. Use width-1 glyphs only. |
 | Art disappeared after an edit | The last good frames are kept while the new pack is invalid. Fix the pack and run `/art reload`. |
