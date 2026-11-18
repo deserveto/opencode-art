@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { Plugin } from "@opencode/plugin/tui"
-import { extend } from "@opentui/solid"
-import { createEffect, createMemo, createSignal, Show } from "solid-js"
+import { effect, extend } from "@opentui/solid"
+import { Show } from "solid-js"
 import { runArtCommand } from "./src/commands/run.tsx"
 import { ArtRenderable } from "./src/render/index.ts"
 import { themeColors } from "./src/plugin/host.ts"
@@ -15,31 +15,43 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function ArtLayer(props: { readonly context: Context; readonly state: ArtState }) {
-  const [themeTick, setThemeTick] = createSignal(0)
-  const theme = createMemo(() => {
-    themeTick()
-    return themeColors(props.context.theme)
-  })
-
-  // Re-resolve colors when the host swaps the active theme. The reads are
-  // cheap and a no-op when the context fields are not reactive.
-  createEffect(() => {
+/**
+ * shortcut: the host can hand plugin code Solid's SSR build, where signals
+ * never notify (OpenCode 2.3.2 does), so art updates are pushed through
+ * `state.subscribe` instead of relying on plugin-side effects.
+ */
+export function ArtLayer(props: { readonly context: Context; readonly state: ArtState }) {
+  // Host-tracked watch: `effect` comes from @opentui/solid, so it re-runs on
+  // host theme changes even when plugin-side Solid is inert.
+  effect(() => {
     void props.context.themeMode
     void props.context.theme.text.base
-    setThemeTick((value) => value + 1)
     props.state.refreshTheme()
   })
 
+  function bind(el: ArtRenderable): void {
+    el.pack = props.state.pack()
+    el.resolvedStyle = props.state.style() ?? undefined
+    el.fps = props.state.fps()
+    el.enabled = props.state.enabled()
+    el.theme = themeColors(props.context.theme)
+  }
+
+  let off: (() => void) | null = null
   return (
     <box position="absolute" left={0} top={0} width="100%" height="100%" zIndex={-1}>
       <art-background
+        ref={(el: ArtRenderable) => {
+          bind(el)
+          off?.()
+          off = props.state.subscribe(() => bind(el))
+        }}
         pack={props.state.pack()}
         resolvedStyle={props.state.style() ?? undefined}
         fps={props.state.fps()}
         enabled={props.state.enabled()}
         animations={props.state.animations}
-        theme={theme()}
+        theme={themeColors(props.context.theme)}
         onError={(text) => props.context.ui.toast.show({ message: text, variant: "error" })}
         onDegrade={(text) => props.context.ui.toast.show({ message: text, variant: "warning" })}
       />

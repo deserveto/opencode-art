@@ -49,6 +49,8 @@ export interface ArtState {
   resolve(pack: Pack): ResolvedStyle
   refreshTheme(): void
   matches(query: string): readonly string[]
+  /** Notified after any change that affects what the art layer draws. */
+  subscribe(listener: () => void): () => void
   dispose(): void
 }
 
@@ -130,6 +132,14 @@ async function createState(context: Context): Promise<ArtState> {
   const cache = new Map<string, Pack>()
   let stopWatch: (() => void) | null = null
   let reloading = false
+  // shortcut: the host can hand plugin code Solid's SSR build (signals never
+  // notify, OpenCode 2.3.2 does), so visual changes also push through these.
+  const listeners = new Set<() => void>()
+
+  function emit(): void {
+    if (disposed) return
+    for (const listener of listeners) listener()
+  }
 
   function refreshProblems(): void {
     const seen = new Set(index.problems.map((problem) => problem.dir))
@@ -182,6 +192,7 @@ async function createState(context: Context): Promise<ArtState> {
         )
       }
     }
+    emit()
   }
 
   function remember(target: Pack): void {
@@ -307,6 +318,7 @@ async function createState(context: Context): Promise<ArtState> {
       notifyOnce(`reload:${message(error)}`, `Reload failed: ${message(error)}`)
     } finally {
       setEnabled(store.effective().enabled)
+      emit()
       syncWatcher()
       reloading = false
     }
@@ -343,6 +355,7 @@ async function createState(context: Context): Promise<ArtState> {
     await store.setEnabled(value)
     const effective = store.effective()
     setEnabled(effective.enabled)
+    emit()
     if (value && !effective.enabled) {
       notifyOnce("project-disabled", "Art is disabled by this project's .opencode/art.json.", "warning")
     }
@@ -392,6 +405,7 @@ async function createState(context: Context): Promise<ArtState> {
     }
     const resolved = resolveFor(current)
     setStyle(resolved)
+    emit()
     if (resolved.effective !== nextStyle) {
       const available: StyleName[] = ["mono", "theme"]
       if (current.manifest.palette?.length) available.push("palette")
@@ -411,6 +425,7 @@ async function createState(context: Context): Promise<ArtState> {
     await store.setFps(clamped)
     const effective = store.effective().fps ?? current?.manifest.fps ?? clamped
     setFps(effective)
+    emit()
     if (effective !== clamped) {
       notify(`FPS is set to ${effective} by this project's .opencode/art.json.`, "warning")
       return
@@ -499,11 +514,21 @@ async function createState(context: Context): Promise<ArtState> {
     load,
     resolve: resolveFor,
     refreshTheme: () => {
-      if (current) setStyle(resolveFor(current))
+      if (current) {
+        setStyle(resolveFor(current))
+        emit()
+      }
     },
     matches,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
     dispose: () => {
       disposed = true
+      listeners.clear()
       if (stopWatch) stopWatch()
       stopWatch = null
     },

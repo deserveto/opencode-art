@@ -145,6 +145,19 @@ The second form checks that pausing clears the cells and sets
 `animationFps` to `undefined`. This is the closest check to the live terminal
 without opening the TUI.
 
+## Live update smoke
+
+The host maps plugin `solid-js` imports to Solid's SSR build, where signals
+never notify, so art updates are pushed through `ArtState.subscribe` instead
+of plugin-side effects. Verify the whole path with Bun:
+
+```sh
+bun run scripts/live-update-smoke.mjs
+```
+
+Expected output ends with `"offCleared":true` and `"styleFgChanged":true`.
+Exit code 1 means a style or on/off change did not repaint the art.
+
 ## CI
 
 `.github/workflows/ci.yml` runs on Ubuntu and Windows with Node 24:

@@ -246,3 +246,25 @@ test("validate reports a discovery problem by id", async () => {
     await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
   }
 })
+
+test("state changes push to subscribers", async () => {
+  const box = await harness()
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = box.configRoot
+  try {
+    await writeCanvasPack(box.projectRoot, "fool", 4, 2, grid(4, 2))
+    box.state = await createArtState(box.context)
+    const events: string[] = []
+    const off = box.state.subscribe(() => events.push("push"))
+    await box.state.setStyle("theme")
+    await box.state.setEnabled(false)
+    off()
+    await box.state.setEnabled(true)
+    assert.deepEqual(events, ["push", "push"])
+  } finally {
+    box.state?.dispose()
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(path.dirname(box.projectRoot), { recursive: true, force: true })
+  }
+})
