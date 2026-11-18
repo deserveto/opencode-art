@@ -51,7 +51,7 @@ Validate before opening a pull request:
 /art validate ./examples/my-pack
 ```
 
-When the authoring CLI is available:
+When the authoring CLI is available to you:
 
 ```sh
 opencode-art validate ./examples/my-pack

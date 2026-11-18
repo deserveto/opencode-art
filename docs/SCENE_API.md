@@ -4,8 +4,8 @@ A scene is an ESM module that returns a grid for a given time. The authoring
 CLI imports it, bakes fixed timesteps, and writes a normal pack. The plugin
 never imports a scene module.
 
-This interface ships with the authoring milestone. The current pre-release
-build does not include the CLI yet.
+This interface ships with the authoring milestone. The CLI and the helper
+entry are included in this repository.
 
 ## Contract
 
@@ -27,8 +27,9 @@ export function scene(t, ctx) {
 | `rows` | yes | Grid height. |
 | `loop` | no | Loop length in seconds. Defaults to `6`. |
 
-The baker samples `t = i / fps` at a fixed step. `t` is in seconds. `loop` is
-the intended loop length; it is not a field in the resulting pack.
+The baker samples `t = i / fps` at a fixed step. `t` is in seconds. It bakes
+`loop * fps` frames, capped at 600. `loop` is the intended loop length; it is
+not a field in the resulting pack.
 
 `ctx` provides:
 
@@ -38,8 +39,8 @@ the intended loop length; it is not a field in the resulting pack.
 | `rows` | Grid height, same as `meta.rows`. |
 | `frame` | Frame index being baked, starting at 0. |
 | `fps` | Sampling rate, same as `meta.fps`. |
-| `palette` | Palette passed to the bake, or the default. |
-| `seed` | Integer seed for deterministic variation. |
+| `palette` | Palette passed to the bake, as an array of color strings. |
+| `seed` | Integer seed for deterministic variation. The CLI currently passes `0`. |
 
 ## Return values
 
@@ -49,7 +50,8 @@ Mono:
 return ["  ..  ", " .@@. ", "  ..  "]
 ```
 
-`chars` is an array of `rows` strings, each exactly `cols` width-1 characters.
+For a mono scene, return an array of exactly `rows` strings, each exactly
+`cols` width-1 characters.
 
 Color:
 
@@ -60,8 +62,9 @@ return {
 }
 ```
 
-`colors` is an array of `rows` arrays. Each cell is a `#rrggbb` string or
-`null`. `null` means the default style color.
+For a color scene, `chars` is the same array of strings and `colors` is an
+array of `rows` arrays. Each cell is a `#rrggbb` string or `null`. `null` means
+the default style color.
 
 The returned grid must be exact. The bake fails if a row is short, long, or
 contains a wide, combining, or control character. Trailing spaces are cells and
@@ -77,8 +80,9 @@ A scene must return the same output for the same `t`, `ctx`, and seed.
   values.
 - Do not depend on the machine, locale, or filesystem iteration order.
 
-Deterministic scenes can be re-baked and diffed. They also loop correctly and
-do not flicker between runs.
+Deterministic scenes can be re-baked and diffed, and they do not flicker
+between runs. A clean loop still depends on the scene: make the first and last
+sampled frames match.
 
 ## Isolation
 
@@ -86,7 +90,7 @@ The CLI imports the scene in a child process with:
 
 - a 60 second timeout
 - a memory cap
-- no access to the plugin's runtime
+- a separate process, outside the TUI
 
 A crash, a hang, or an invalid return fails the bake and reports the error. It
 cannot affect a running TUI. The plugin itself never loads `scene.mjs`,
@@ -97,24 +101,26 @@ Scene code is executable code. Bake only scenes you trust.
 
 ## Helpers
 
-The package's `./scene` entry exports these helpers for scenes:
+The package's `./scene` entry exports these author-time helpers:
 
-| Helper | Role |
+| Helper | Signature and role |
 |---|---|
-| `loadCanvas` | Load a `.txt` canvas into rows so a scene can animate an existing drawing. |
-| `wave` | Apply the same sine displacement model as the `wave` pack effect. |
-| `shimmer` | Apply the same deterministic sparkle model as the `shimmer` effect. |
-| `drift` | Apply the same wrapped scroll model as the `drift` effect. |
-| `twinkle` | Apply the same sparse fade model as the `twinkle` effect. |
-| `scanline` | Apply the same moving band model as the `scanline` effect. |
-| `palette` | Build a color ramp from palette stops. |
-| `noise` | Deterministic noise from a numeric seed. |
-| `clamp` | Bound a number to a minimum and maximum. |
-| `lerp` | Interpolate between two numbers. |
+| `clamp` | `clamp(value, min = 0, max = 1)`: bound a number. |
+| `lerp` | `lerp(a, b, t)`: interpolate between two numbers. |
+| `noise` | `noise(seed)`: return a deterministic `(index) => number` in [0, 1). |
+| `palette` | `palette(stops)`: normalize an array of color strings to lowercase. |
+| `loadCanvas` | `loadCanvas(text, cols, rows)`: parse exact-dimension text into `{ chars }`; throws on a size mismatch. |
+| `wave` | `wave(grid, time, options?)`: shift cells along an axis; options `axis`, `amplitude`, `speed`. |
+| `shimmer` | `shimmer(grid, time, options?)`: swap adjacent glyphs; options `seed`, `intensity`. |
+| `drift` | `drift(grid, time, options?)`: wrapped scroll; options `axis`, `speed`. |
+| `twinkle` | `twinkle(grid, time, options?)`: sparse glyphs blink to spaces; options `seed`, `intensity`, `speed`. |
+| `scanline` | `scanline(grid, time, options?)`: a moving band nudges glyphs on the built-in density ramp; options `axis`, `speed`, `intensity`. |
 
-The helpers share the pack effects' deterministic math, so a baked scene and a
-canvas with the same effect look consistent. The exact argument shapes are
-fixed with the CLI in the authoring milestone.
+The motion helpers are author-time utilities. They are separate from the
+runtime pack effects and use their own defaults, so do not expect identical
+pixels from a helper and the effect of the same name. The signatures above
+match `src/scene/index.ts`. The CLI entrypoint ships with the authoring
+milestone.
 
 ## Examples
 
@@ -172,10 +178,23 @@ export function scene(t, ctx) {
 
 ### Static canvas scene
 
-A scene can animate an existing drawing with `loadCanvas`. The helper loads a
-`.txt` canvas from the pack being baked and returns rows in the same shape a
-scene returns, so the scene can shift or decorate them. Its exact argument
-shape is fixed with the CLI in the authoring milestone.
+A scene can animate an existing drawing with `loadCanvas`. Read the `.txt`
+file yourself, then pass its text with the exact dimensions:
+
+```js
+import { loadCanvas } from "opencode-art/scene"
+
+export const meta = { fps: 12, cols: 6, rows: 3, loop: 4 }
+
+export function scene(t, ctx) {
+  const text = "  ..  \n .@@. \n  ..  " // replace with readFile(...)
+  const base = loadCanvas(text, ctx.cols, ctx.rows)
+  return base.chars
+}
+```
+
+`loadCanvas` throws if the text is not exactly `cols` x `rows`, which makes a
+stale canvas fail the bake instead of shifting the grid.
 
 ## Bake and validate
 
@@ -191,5 +210,5 @@ The bake writes `frames/*.txt`, optional `frames/*.ans`, and `art.json`, then
 validates the output. Add `scene.mjs` to the pack yourself if you want the
 source kept as provenance. The plugin never reads it.
 
-If the bake reports an error, fix the scene and run it again. A failed bake
-does not change the existing pack unless `--force` overwrote it.
+If the bake reports an error, fix the scene and run it again. The command does
+not report success on invalid output.

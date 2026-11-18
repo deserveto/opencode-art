@@ -85,15 +85,17 @@ toast explains the reason once per pack and request.
 
 ### Light and dark themes
 
-`mono`, `theme`, and `palette` read the active theme, so they follow light and
-dark mode automatically.
+`mono` and `theme` read the active theme, so they follow light and dark mode
+automatically. `palette` uses the pack palette when one exists and theme stops
+otherwise. A pack palette is fixed by the author and does not change with the
+theme.
 
 `original` colors are authored against a background. On a light theme the
 resolver samples the sidecar colors and checks them against the theme
 background. A color passes if it already has 2.2:1 contrast, or if blending it
 at most 25 percent toward the theme foreground reaches 3:1. If more than a
-quarter of the sampled colors fail, the pack uses `palette` instead. The
-dialog labels the adjustment instead of hiding it.
+quarter of the sampled colors fail, the pack uses `palette` (or `theme` when it
+has no palette). The dialog labels the adjustment instead of hiding it.
 
 There is no per-cell color blending in the current implementation. It is pass
 or fall back.
@@ -111,8 +113,8 @@ defaults to the pack's `fps` and is clamped to 1-30.
 
 The renderer has two one-shot safety nets:
 
-1. If the 30-frame rolling average of preparation time is over 12 ms and the
-   style is `original`, it switches to `palette` once and toasts.
+1. If the 30-frame rolling average of paint time is over 12 ms and the style is
+   `original`, it switches to `palette` once and toasts.
 2. If the average is over 20 ms, it halves the effective fps once, never below
    5, and toasts.
 
@@ -122,8 +124,8 @@ Neither net oscillates. A style change by the user can reselect `original`.
 
 There is no SSH-specific code. The plugin uses the capability flags the host
 reports. If a terminal multiplexer or remote shell does not forward truecolor,
-the host normally reports 256 or 16 colors, and the art degrades as described
-above. `NO_COLOR` still forces `mono`.
+the plugin sees the lower capability and the art degrades as described above.
+`NO_COLOR` still forces `mono`.
 
 ## Glyph width
 

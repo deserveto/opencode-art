@@ -107,7 +107,7 @@ also exported as `opencode-art/schema`.
 | `homepage` | no | string | `https://` URL, at most 200 characters. |
 | `fps` | yes | number | 1-30. Playback rate and effect step rate. |
 | `cols` | yes | integer | 1-400. Every frame line and canvas line must match. |
-| `rows` | yes | integer | 1-200. Frame count and canvas line count must match. |
+| `rows` | yes | integer | 1-200. Frame line count and canvas line count must match. |
 | `defaultStyle` | no | enum | `mono`, `theme`, `palette`, or `original`. Default `mono`. |
 | `ramp` | no | string | 2-64 unique width-1 glyphs, low to high density. Default ` .:-=+*#%@`. |
 | `palette` | no | string[] | 2-32 `#rrggbb` stops, low to high brightness. |
@@ -180,7 +180,8 @@ Allowed sequences:
 
 - `\x1b[38;2;R;G;Bm` truecolor
 - `\x1b[38;5;Nm` 256-color
-- `\x1b[30-37m` and `\x1b[90-97m` basic and bright foreground
+- `\x1b[30m` through `\x1b[37m`, and `\x1b[90m` through `\x1b[97m` basic and
+  bright foreground
 - `\x1b[0m` and `\x1b[39m` reset
 
 Everything else is stripped with a warning: background colors, cursor
@@ -194,7 +195,7 @@ Rules:
 
 - Sidecars are optional, but all-or-nothing: if any frame has a `.ans`, every
   frame must have one with the same basename.
-- `canvas.ans` follows the same rule for a canvas.
+- `canvas.ans` is optional on its own; a canvas has only one frame.
 - A sidecar has at most 4096 unique colors. The bundled Fool uses 64.
 - A cell with no preceding foreground sequence has no sidecar color. In
   `original` style it renders black, so color visible cells explicitly or reset
@@ -221,7 +222,8 @@ Rules:
 | `homepage` | 200 characters |
 
 The loader rejects oversized packs with the cap in the message. The authoring
-CLI downscales or quantizes before writing so it can fit a pack under the caps.
+CLI fits and quantizes output before writing, and errors if the result still
+exceeds a cap.
 
 ## Validation
 
@@ -258,7 +260,7 @@ Additional checks:
 | `id "x" does not match the folder name "y"` | The folder was renamed without the manifest. | Rename the folder or fix `id`. |
 | `effects is only valid with canvas` | A frame pack declares effects. | Remove `effects`; motion comes from the frames. |
 | `resolves outside the pack root` | An absolute path, drive letter, `..`, or escaping symlink. | Use a path relative to the pack folder. |
-| `original` falls back to palette | No sidecars, 16-color terminal, or a failed light-theme contrast check. | Provide sidecars, use a 256-color terminal, or accept the fallback. |
+| `original` falls back to palette or theme | No sidecars, 16-color terminal, or a failed light-theme contrast check. | Provide sidecars, use a 256-color terminal, or accept the fallback. |
 
 ## Bundled Fool
 

@@ -44,18 +44,20 @@ renders.
 ## Dialog
 
 ```text
-+ ASCII Art ------------------------------------------------------+
-| Packs (3)                 | Preview                            |
-| > fool          bundled   | The Fool                           |
-|   logo          user      | Styles: mono · theme · palette ... |
-|   rain          project   | ... still frame ...                |
-|                                                                 |
-| Enabled: yes   Style: mono   FPS: 10   Frames: 60               |
-| Problems                                                        |
-| rain: art.json: expected 8 rows, found 7                        |
-| Up/Down select · Enter apply · s style · Left/Right fps · ...   |
-| Create art by asking the agent in chat · ~/.config/opencode/arts |
-+-----------------------------------------------------------------+
++ ASCII Art ---------------------------------------------------+
+| Packs (3)                                                    |
+| > fool          bundled   The Fool                           |
+|   logo          user      Shimmer Mark                       |
+|   rain          project   Rain                               |
+| Preview: The Fool                                            |
+| Styles: mono · theme · palette · original                    |
+| Enabled: yes   Style: mono   FPS: 10   Frames: 60            |
+| Problems: rain: art.json: expected 8 rows, found 7           |
+| Up/Down select · Enter apply · s style · Left/Right fps      |
+| e enabled · r reload · Esc close · truecolor                 |
+| Create art by asking the agent in chat                       |
+| ~/.config/opencode/arts                                      |
++--------------------------------------------------------------+
 ```
 
 The exact layout adjusts to the terminal size. The preview is a still frame of
@@ -119,7 +121,9 @@ The project file is committed and shared. Its shape:
 ```
 
 All fields are optional. A field that is absent falls through to the next
-layer.
+layer. A project value wins when settings load. A pack selected in the dialog
+or with `/art set` applies for the current session and is written to global
+settings; the project file remains the default for new sessions.
 
 The plugin never writes the project file. This is deliberate: changing a
 repository's settings is your decision, not a side effect of opening a dialog.

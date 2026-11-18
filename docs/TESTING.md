@@ -17,7 +17,7 @@ npm test
 | `npm run typecheck` | Runs `tsc --noEmit`. |
 | `npm test` | Runs every `test/**/*.test.ts` file with `node:test`. |
 | `npm run test:node` | Same as `npm test`. |
-| `npm run cli` | Reserved for the authoring CLI; not available in this pre-release build. |
+| `npm run cli` | Runs the authoring CLI from `bin/opencode-art.cjs`. |
 
 Run one file:
 
@@ -47,6 +47,8 @@ node --test --test-name-pattern "original" "test/**/*.test.ts"
 | `test/art/sidecar.test.ts` | SGR allowlist, strip invariant, warnings, color cap. |
 | `test/art/paths.test.ts` | Path escapes, absolute paths, drive letters, symlink containment. |
 | `test/integration/fool.test.ts` | The bundled Fool loads with 60 frames and color. |
+| `test/cli/cli.test.ts` | The real CLI binary: init, validate, preview, image and GIF bakes, scenes, timeouts, bad options, and a missing `ffmpeg`. |
+| `test/cli/scene.test.ts` | Scene helpers: dimensions, color travel, determinism, and input immutability. |
 | `test/render/brightness.test.ts` | Ramp rank, density table, out-of-bounds cells. |
 | `test/render/capabilities.test.ts` | Host capabilities, environment fallback, `NO_COLOR`, `TERM=dumb`. |
 | `test/render/colors.test.ts` | Hex parsing, xterm 256 mapping, 16/256 quantization, contrast. |
@@ -108,14 +110,34 @@ Run these against a live OpenCode session before a release.
 
 ## CLI tests
 
-When the authoring CLI lands, add:
+`test/cli/cli.test.ts` runs the real binary in a child process. It covers:
 
-- Bake a 4 x 2 PNG and validate the resulting canvas.
-- Bake a 2-frame GIF and validate the frame sequence.
-- Reject a scene with wrong dimensions, wide glyphs, or tabs.
-- Time out a hanging scene without crashing the CLI.
-- Verify exit codes `0`, `1`, and `2`.
-- Round-trip a scene with color and check sidecar invariants.
+- `init` scaffolding, valid output, and preview width.
+- `init` refusing a non-empty non-pack directory without `--force`.
+- Invalid folder names.
+- `validate` printing every error and exiting 1.
+- PNG, JPEG, WebP, and GIF bakes.
+- A deterministic scene baked in a child process.
+- A bad scene and a hanging scene both exiting 1.
+- Bad options and a missing `ffmpeg`.
+
+A real video decode with `ffmpeg` installed is not covered; only the
+missing-binary path is. GIF fixtures live in `test/fixtures/media`. Other media
+is generated in a temporary directory during the test.
+
+## Headless render smoke
+
+The real `ArtRenderable` can be painted on OpenTUI's headless test renderer
+with Bun 1.4.4:
+
+```sh
+bun run scripts/render-smoke.mjs frames/fool 100 24 original
+bun run scripts/render-smoke.mjs frames/fool 80 20 original pause-after
+```
+
+The second form checks that pausing clears the cells and sets
+`animationFps` to `undefined`. This is the closest check to the live terminal
+without opening the TUI.
 
 ## CI
 

@@ -14,11 +14,11 @@ only inside the authoring CLI, on the author's machine.
 
 ## Availability
 
-The `opencode-art` CLI ships with the authoring milestone. This pre-release
-build does not contain the CLI entrypoint yet. The command interface below is
-the specified interface, not a shipped binary.
+The `opencode-art` CLI is an author-time tool. It ships with the authoring
+milestone and is included in this repository. It needs Node 22.18 or newer.
+The plugin never imports it and never runs scene code.
 
-Until the CLI lands, you can create a pack in two ways:
+You can also create a pack without the CLI:
 
 - Ask the agent to write `art.json`, `canvas.txt`, or `frames/*.txt` directly.
 - Copy an example and edit it by hand.
@@ -72,28 +72,32 @@ Then run `/art reload` if the watcher has not already picked up the change.
 
 ### `init <dir>`
 
-Scaffolds `art.json`, `canvas.txt`, and a short README. It refuses to overwrite
-a non-empty directory unless `--force` is passed.
+Scaffolds `art.json`, a 40 x 10 `canvas.txt`, and a short README. It refuses a
+non-empty directory that is not already an opencode-art pack unless `--force`
+is passed. If the directory is an existing pack with the same id, `init`
+overwrites its `art.json`, `canvas.txt`, and `README.md`; do not point it at a
+pack you want to keep.
 
 ### `bake <input> --out <dir>`
 
-Bakes an image, GIF, video, or `.mjs` scene into a pack. Supported image input
-is PNG, JPEG, and WebP. Animated GIF and video produce frames. A scene module
-produces frames.
+Bakes an image, GIF, video, or `.mjs`/`.js` scene into a pack. Supported image
+input is PNG, JPEG, and WebP. Animated GIF and video produce frames. A scene
+module produces frames.
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--cols` | Output width. Caps apply. | `180` |
-| `--rows` | Output height. Caps apply. | `50` |
-| `--fps` | Frames per second. | `10` |
+| `--cols` | Output width, 1-400. | `180` |
+| `--rows` | Output height, 1-200. | `50` |
+| `--fps` | Frames per second, 1-30. | `10` |
 | `--loop` | Seconds for scene, video, or GIF input. | `6` |
-| `--charset` or `--ramp` | Glyph ramp, low to high density. | ` .:-=+*#%@` |
-| `--palette` | Comma-separated hex stops for color output. | none |
-| `--colors` | Quantize to at most this many colors. | `64` |
-| `--dither` | Floyd-Steinberg dithering for mono output. | off |
+| `--charset` or `--ramp` | 2-64 unique width-1 glyphs, low to high density. | ` .:-=+*#%@` |
+| `--palette` | 2-32 comma-separated hex stops for color output. | none |
+| `--colors` | Quantize to this many colors, 2-256. | `64` |
+| `--dither` | Floyd-Steinberg dithering. Implies a mono pack and conflicts with `--palette`. | off |
 | `--invert` | Invert luminance. | off |
 | `--aspect` | Sample aspect ratio. Terminal cells are about twice as tall as wide. | `0.5` |
-| `--force` | Overwrite an existing pack directory. | off |
+| `--timeout` | Scene timeout in seconds. | `60` |
+| `--force` | Overwrite a non-empty directory that is not already a matching pack. | off |
 
 Behavior:
 
@@ -101,8 +105,15 @@ Behavior:
 - No network access and no telemetry.
 - Image decoders are pure JavaScript, with no native modules.
 - Video input needs `ffmpeg` on `PATH`. A missing binary is a clear error.
-- The output pack is ordinary data. `scene.mjs` stays as provenance and is
-  never imported by the plugin.
+- For a scene, a flag overrides the matching `meta` value. Without the flag,
+  `meta` wins.
+- Baking into an existing pack folder with the same id replaces its frame or
+  canvas files and rewrites `art.json`. Use a new folder or a backup if you
+  want to keep the old pack.
+- `--force` bypasses the output-directory check. Without it, only an empty
+  directory or an existing pack with the matching id is accepted.
+- The output pack is ordinary data. If `scene.mjs` is kept in the pack, it is
+  provenance and is never imported by the plugin.
 
 ### `validate <dir>`
 
@@ -111,8 +122,9 @@ failure. This is the same validation the loader uses.
 
 ### `preview <dir> [--frame N] [--width N]`
 
-Prints a downscaled still preview to stdout. It does not animate. Use it to
-check dimensions and density before opening the TUI.
+Prints a downscaled still preview to stdout. It does not animate. The default
+width is 80, and `--frame` clamps to the last frame. Use it to check dimensions
+and density before opening the TUI.
 
 ### `help`
 
@@ -213,7 +225,7 @@ Tips:
 - `shimmer` and `twinkle` use `seed`; choose one so the pattern is stable.
 - `drift` and `wave` are resolution-independent because effects run at display
   size.
-- Keep the `ramp` ordered low to high density. `":-~=+*#%@"` is a good start.
+- Keep the `ramp` ordered low to high density. `.:-~=+*#%@` is a good start.
 - A palette of 3-5 stops is enough for readable art. More stops do not add
   detail after terminal quantization.
 

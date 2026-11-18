@@ -12,8 +12,8 @@ sessions draw nothing, and art sits behind the host UI at `zIndex -1`.
 - License: MIT for code, CC BY 4.0 for bundled art
 
 Status: pre-release (0.1.0). The pack format, player, color styles, effects,
-commands, dialog, settings, and watch loop are implemented. The authoring CLI
-ships with the authoring milestone; see [docs/AUTHORING.md](docs/AUTHORING.md).
+commands, dialog, settings, watch loop, and authoring CLI are implemented. The
+CLI is author-time only; see [docs/AUTHORING.md](docs/AUTHORING.md).
 
 ## Install
 
@@ -119,9 +119,10 @@ The folder name is the pack id. A duplicate id in one scope is resolved
 lexicographically; the other copy is reported.
 
 The authoring CLI `opencode-art init`, `bake`, `validate`, and `preview` ships
-with the authoring milestone. It is an author-time tool only. The plugin never
-imports `scene.mjs` and never runs scene code. See
-[docs/AUTHORING.md](docs/AUTHORING.md) and [docs/SCENE_API.md](docs/SCENE_API.md).
+with the authoring milestone and is included in this repository. It is an
+author-time tool only. The plugin never imports it, never imports `scene.mjs`,
+and never runs scene code. See [docs/AUTHORING.md](docs/AUTHORING.md) and
+[docs/SCENE_API.md](docs/SCENE_API.md).
 
 ## Settings
 
@@ -146,11 +147,13 @@ writes into a repository. A project override is a deliberate hand edit:
 }
 ```
 
-All fields are optional. A project value wins over the global value on load
-and reload. A project can, for example, disable art for a serious repository;
-`/art on` cannot override that, and the plugin explains why in a toast. Invalid
-fields are ignored one at a time. A file with a newer `version` is ignored as a
-whole with a warning.
+All fields are optional. Project values win when settings load. Because the
+dialog writes global settings, a pack selected in `/art` applies for the
+current session; the project file remains the shared default for new sessions.
+A project can, for example, disable art for a serious repository; `/art on`
+cannot override that, and the plugin explains why in a toast. Invalid fields
+are ignored one at a time. A file with a newer `version` is ignored as a whole
+with a warning.
 
 ## Styles
 
@@ -162,9 +165,9 @@ whole with a warning.
 | `original` | Per-cell RGB from `.ans` sidecars. |
 
 `original` needs color sidecars and a terminal with at least 256 colors. On a
-16-color terminal it falls back to `palette`; without sidecars it falls back to
-`palette`, then `theme`. `NO_COLOR` and `TERM=dumb` force `mono`. The dialog
-shows the effective style and a short reason when it differs from the request.
+16-color terminal it falls back to `palette` or `theme`; without sidecars it
+does the same. `NO_COLOR` and `TERM=dumb` force `mono`. The dialog shows the
+effective style and a short reason when it differs from the request.
 
 More detail: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
@@ -176,7 +179,7 @@ A pack has `art.json` and exactly one of `canvas` or `frames`.
 my-pack/
   art.json
   canvas.txt
-  canvas.ans
+  canvas.ans        optional
 ```
 
 ```text
@@ -184,9 +187,9 @@ my-pack/
   art.json
   frames/
     000.txt
-    000.ans
+    000.ans         optional
     001.txt
-    001.ans
+    001.ans         optional
 ```
 
 Every line must be exactly `cols` width-1 printable characters, and every frame
@@ -207,7 +210,8 @@ stops when art is disabled.
 
 ## Examples
 
-These are repository examples, not installed packs. Copy one into the user
+These are repository examples, not installed packs. They are not included in
+the published package and are not loaded by default. Copy one into the user
 arts directory to try it.
 
 | Example | Shape | What it shows |
@@ -231,6 +235,8 @@ bundle them. Do not install newer OpenTUI APIs into the plugin expecting them
 to run on 2.3.2.
 
 Details and terminal degradation: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+
+Coming from the old `ascii-bg` plugin: [docs/MIGRATION.md](docs/MIGRATION.md).
 
 ## Troubleshooting
 

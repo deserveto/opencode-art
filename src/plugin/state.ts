@@ -205,6 +205,9 @@ async function createState(context: Context): Promise<ArtState> {
 
   function problemsFor(candidate: PackCandidate, errors: readonly PackError[]): void {
     deepProblems.set(candidate.dir, { id: candidate.id, dir: candidate.dir, scope: candidate.scope, errors })
+    // A deeply invalid pack is not selectable until the next reload re-checks it.
+    index = { ...index, candidates: index.candidates.filter((entry) => entry.dir !== candidate.dir) }
+    setCandidates(index.candidates)
     refreshProblems()
     const first = errors[0]
     notifyOnce(
@@ -393,9 +396,16 @@ async function createState(context: Context): Promise<ArtState> {
       return { ok, lines }
     }
     const list = target ? index.candidates.filter((entry) => entry.id === target) : index.candidates
-    if (target && list.length === 0) return { ok: false, lines: [`No pack with id "${target}".`] }
+    if (target && list.length === 0) {
+      const known = [...deepProblems.values()].find((problem) => problem.id === target)
+      if (known) {
+        for (const error of known.errors) lines.push(`${known.id}: ${errorLine(error)}`)
+        return { ok: false, lines }
+      }
+      return { ok: false, lines: [`No pack with id "${target}".`] }
+    }
     if (!target) {
-      for (const problem of index.problems) {
+      for (const problem of problems()) {
         ok = false
         for (const error of problem.errors) lines.push(`${problem.id}: ${errorLine(error)}`)
       }
