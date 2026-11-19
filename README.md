@@ -89,7 +89,7 @@ If the terminal reports no color, the art is still drawn in `mono`. Run
 | Command | Action |
 |---|---|
 | `/art` | Open the art browser. |
-| `/art create [scene\|image\|gif\|video\|logo]` | Pick a prompt template and prefill the chat input (or press `c` in `/art`). |
+| `/art create [scene\|image\|gif\|video\|logo\|<path>]` | Open the interactive creation TUI (or press `c` in `/art`). |
 | `/art on` / `/art off` / `/art toggle` | Enable or disable art and persist the choice. |
 | `/art next` | Select the next pack in scope order and wrap. |
 | `/art set <id>` | Select a pack by id. |
@@ -100,9 +100,9 @@ If the terminal reports no color, the art is still drawn in `mono`. Run
 | `/art validate [id\|path]` | Validate one pack or every pack. A filesystem path is accepted. |
 | `/art help` | Show commands and the arts paths. |
 
-There is no `/art list`; the dialog is the list. `/art create` prefills an
-adjustable prompt template in the chat composer so you can edit the `[...]`
-placeholders before sending it to the agent.
+There is no `/art list`; the dialog is the list. `/art create` opens a native
+TUI creation form that auto-detects media file paths (for direct 0-token CLI
+baking) versus text descriptions (for a compact 2-line AI chat prompt).
 
 Full command and dialog reference: [docs/COMMANDS.md](docs/COMMANDS.md).
 
@@ -110,83 +110,31 @@ Full command and dialog reference: [docs/COMMANDS.md](docs/COMMANDS.md).
 
 Three ways to get a pack:
 
-1. Run `/art create` (or press `c` inside `/art`) to prefill a prompt template,
-   or ask the agent directly in chat. The package registers the `opencode-art`
-   authoring skill from [skills/opencode-art/SKILL.md](skills/opencode-art/SKILL.md).
+1. Run `/art create` (or press `c` inside `/art`) to open the interactive
+   creation TUI, or ask the agent directly in chat. The package registers the
+   `opencode-art` authoring skill from
+   [skills/opencode-art/SKILL.md](skills/opencode-art/SKILL.md).
 2. Copy an example from [examples/](examples) and edit the text.
 3. Write a pack by hand from [docs/PACKS.md](docs/PACKS.md).
 
-### Prompt templates
+### Interactive `/art create` TUI
 
-If you are not sure what inputs or options are supported, run
-`/art create` (or `/art create <scene|image|gif|video|logo>`) to insert one of
-these adjustable templates into the chat composer, then replace the bracketed
-values:
+`/art create` (or `c` in `/art`) opens a single-screen TUI form:
 
-**1. Procedural animated scene (`/art create scene`)**
-
-```text
-Create a new animated ASCII art pack for opencode-art using the opencode-art skill:
-- Pack id: [my-scene]
-- Scene idea: [e.g. cyberpunk rainy street with neon signs, falling rain, and puddle reflections]
-- Motion & loop: [smooth 6-second seamless loop at 12 fps]
-- Size & fit: [180x50], fit [stretch | contain | cover | center]
-- Color style: [mono | theme | palette | original] (optional palette hex stops: [#1e1e2e, #89b4fa, #f5c2e7])
-- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
-Please init the pack, write a deterministic scene.mjs, bake, validate, preview, and tell me the /art set command.
-```
-
-**2. Image to ASCII canvas (`/art create image`)**
-
-```text
-Convert an image into an opencode-art ASCII canvas pack using the opencode-art skill:
-- Input image path: [/path/to/image.png] (supports PNG, JPEG, WebP)
-- Pack id: [my-image]
-- Size & fit: [180x50], fit [stretch | contain | cover | center]
-- Color style: [original | palette | theme | mono] (optional: --dither for mono, --invert)
-- Motion effects (optional, up to 4): [none | shimmer | wave | drift | twinkle | scanline] at [10] fps
-- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
-Please bake the image, add any requested effects to art.json, validate, preview, and tell me the /art set command.
-```
-
-**3. Animated GIF to ASCII frames (`/art create gif`)**
-
-```text
-Convert an animated GIF into an opencode-art frame pack using the opencode-art skill:
-- Input GIF path: [/path/to/animation.gif]
-- Pack id: [my-gif]
-- Size & fit: [180x50], fit [stretch | contain | cover | center]
-- Playback: [10] fps, loop duration [6] seconds
-- Color style: [original | palette | theme | mono] (colors: [64], optional: --dither for mono, --invert)
-- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
-Please bake the GIF into frames, validate, preview, and tell me the /art set command.
-```
-
-**4. Video to animated ASCII frames (`/art create video`)**
-
-```text
-Convert a video file into an opencode-art animated frame pack using the opencode-art skill:
-- Input video path: [/path/to/video.mp4] (requires ffmpeg on PATH)
-- Pack id: [my-video]
-- Size & fit: [180x50], fit [stretch | contain | cover | center]
-- Playback: [12] fps, loop duration [6] seconds
-- Color style: [original | palette | theme | mono] (colors: [64], optional: --dither for mono, --invert)
-- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
-Please bake the video into frames, validate, preview, and tell me the /art set command.
-```
-
-**5. Logo / banner + motion effects (`/art create logo`)**
-
-```text
-Create a custom ASCII logo or static canvas pack for opencode-art using the opencode-art skill:
-- Pack id: [my-logo]
-- Text or artwork to draw: [e.g. bold "OPENCODE" emblem centered over a subtle grid]
-- Size & fit: [80x24], fit [center | contain | stretch | cover]
-- Color style: [palette | theme | mono] (optional palette hex stops: [#313244, #89b4fa, #f5c2e7])
-- Motion effects (optional, up to 4): [shimmer | wave | drift | twinkle | scanline] at [10] fps
-- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
-Please create art.json and canvas.txt, validate, preview, and tell me the /art set command.
-```
+- **Paste a media path** (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.mp4`,
+  `.mov`, `.webm`, or `.mjs` — surrounding quotes from Windows *"Copy as path"*
+  are stripped automatically):
+  - Detects the file format and auto-fills `Pack ID` from the filename.
+  - Pressing `Enter` runs `opencode-art bake` directly in the background,
+    applies your chosen `Style`, `Fit`, `Effect`, and optional Git pin
+    (`.opencode/art.json`), reloads packs, and activates the new background
+    immediately (0 LLM tokens).
+- **Type a visual idea** (for an animated `scene` or static `logo`):
+  - Auto-slugifies a default `Pack ID`.
+  - Pressing `Enter` inserts a compact, ready-to-send 2-line prompt into the
+    chat composer with all chosen settings (`Scope`, `Pin Git`, `Style`, `Fit`,
+    `Effect`, `Grid/FPS`) already filled in — no `[...]` placeholders left to
+    delete.
 
 The shortest path is to copy a canvas pack, change `canvas.txt`, and let the
 watcher reload it:

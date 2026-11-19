@@ -267,95 +267,40 @@ Example sidecar line:
 
 The matching `.txt` line is `/@`.
 
-## The agent skill and prompt templates
+## The agent skill and `/art create` TUI
 
 The package's server part registers the `opencode-art` skill from
 [skills/opencode-art/SKILL.md](../skills/opencode-art/SKILL.md). The skill
 teaches the pack format, the scene API, the authoring loop, the arts paths, and
 the common failures.
 
-You can ask in chat in plain language, or run `/art create` (or press `c`
-inside `/art`) to choose a template and prefill the chat composer:
+Run `/art create` (or press `c` inside `/art`) to open the single-screen creation
+TUI:
 
-| Command | Template purpose |
+| Command | Behavior |
 |---|---|
-| `/art create` | Open the template picker dialog. |
-| `/art create scene` | Procedural animated scene (`scene.mjs`) from a visual idea. |
-| `/art create image` | Convert a PNG, JPEG, or WebP file into a static or effect-animated canvas. |
-| `/art create gif` | Convert an animated GIF file into a frame pack. |
-| `/art create video` | Convert an MP4, MOV, or WebM video into a frame pack (requires `ffmpeg`). |
-| `/art create logo` | Draw a custom ASCII logo, banner, or static canvas with optional effects. |
+| `/art create` | Open the creation TUI in `auto` mode. |
+| `/art create <path>` | Open the creation TUI prefilled with an image, GIF, video, or `.mjs` file path. |
+| `/art create scene [idea]` | Open the creation TUI in `scene` mode (optional idea prefilled). |
+| `/art create logo [idea]` | Open the creation TUI in `logo` mode (optional idea prefilled). |
+| `/art create image\|gif\|video` | Open the creation TUI preset to that media mode. |
 
-Each template lists the accepted fields in `[...]` brackets so you can adjust
-the pack id, file path or description, dimensions, fit mode (`stretch`,
-`contain`, `cover`, `center`), color style (`mono`, `theme`, `palette`,
-`original`), motion effects (`shimmer`, `wave`, `drift`, `twinkle`, `scanline`),
-and scope (`user` or `project`) before pressing `Enter`:
+How the creation TUI executes when you press `Enter`:
 
-### Procedural animated scene (`/art create scene`)
+1. **Direct CLI Bake (Media & `.mjs` files — 0 LLM tokens)**
+   When `Source` is a valid file path (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`,
+   `.mp4`, `.mov`, `.webm`, or `.mjs`), the TUI spawns `opencode-art bake` in a
+   background child process, applies your chosen `Style`, `Fit`, `Effect`, and
+   optional `.opencode/art.json` pin (`Pin Git: yes`), reloads packs, and
+   activates the new background immediately.
+2. **Compact 2-Line Chat Prompt (AI `scene` / `logo`)**
+   When `Source` is a text description, the TUI closes and inserts a ready-to-send
+   2-line prompt into the chat composer with no `[...]` placeholders:
 
-```text
-Create a new animated ASCII art pack for opencode-art using the opencode-art skill:
-- Pack id: [my-scene]
-- Scene idea: [e.g. cyberpunk rainy street with neon signs, falling rain, and puddle reflections]
-- Motion & loop: [smooth 6-second seamless loop at 12 fps]
-- Size & fit: [180x50], fit [stretch | contain | cover | center]
-- Color style: [mono | theme | palette | original] (optional palette hex stops: [#1e1e2e, #89b4fa, #f5c2e7])
-- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
-Please init the pack, write a deterministic scene.mjs, bake, validate, preview, and tell me the /art set command.
-```
-
-### Image to ASCII canvas (`/art create image`)
-
-```text
-Convert an image into an opencode-art ASCII canvas pack using the opencode-art skill:
-- Input image path: [/path/to/image.png] (supports PNG, JPEG, WebP)
-- Pack id: [my-image]
-- Size & fit: [180x50], fit [stretch | contain | cover | center]
-- Color style: [original | palette | theme | mono] (optional: --dither for mono, --invert)
-- Motion effects (optional, up to 4): [none | shimmer | wave | drift | twinkle | scanline] at [10] fps
-- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
-Please bake the image, add any requested effects to art.json, validate, preview, and tell me the /art set command.
-```
-
-### GIF to animated ASCII (`/art create gif`)
-
-```text
-Convert an animated GIF into an opencode-art frame pack using the opencode-art skill:
-- Input GIF path: [/path/to/animation.gif]
-- Pack id: [my-gif]
-- Size & fit: [180x50], fit [stretch | contain | cover | center]
-- Playback: [10] fps, loop duration [6] seconds
-- Color style: [original | palette | theme | mono] (colors: [64], optional: --dither for mono, --invert)
-- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
-Please bake the GIF into frames, validate, preview, and tell me the /art set command.
-```
-
-### Video to animated ASCII (`/art create video`)
-
-```text
-Convert a video file into an opencode-art animated frame pack using the opencode-art skill:
-- Input video path: [/path/to/video.mp4] (requires ffmpeg on PATH)
-- Pack id: [my-video]
-- Size & fit: [180x50], fit [stretch | contain | cover | center]
-- Playback: [12] fps, loop duration [6] seconds
-- Color style: [original | palette | theme | mono] (colors: [64], optional: --dither for mono, --invert)
-- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
-Please bake the video into frames, validate, preview, and tell me the /art set command.
-```
-
-### Logo / banner + motion effects (`/art create logo`)
-
-```text
-Create a custom ASCII logo or static canvas pack for opencode-art using the opencode-art skill:
-- Pack id: [my-logo]
-- Text or artwork to draw: [e.g. bold "OPENCODE" emblem centered over a subtle grid]
-- Size & fit: [80x24], fit [center | contain | stretch | cover]
-- Color style: [palette | theme | mono] (optional palette hex stops: [#313244, #89b4fa, #f5c2e7])
-- Motion effects (optional, up to 4): [shimmer | wave | drift | twinkle | scanline] at [10] fps
-- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
-Please create art.json and canvas.txt, validate, preview, and tell me the /art set command.
-```
+   ```text
+   Create an opencode-art scene pack "cyberpunk-rainy-street" in "/home/user/.config/opencode/arts/cyberpunk-rainy-street" (180x50, 12 fps, 4s loop, style: palette, fit: cover). Init, write deterministic scene.mjs, bake, validate, preview, and tell me /art set cyberpunk-rainy-street.
+   Scene: cyberpunk rainy street with neon signs and puddle reflections
+   ```
 
 The agent can create the pack directly. With the CLI, it can also
 `init`, write `scene.mjs`, `bake`, `validate`, and `preview` in a loop until the

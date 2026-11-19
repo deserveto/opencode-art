@@ -8,7 +8,7 @@ Subcommand names are case-insensitive.
 | Command | Behavior |
 |---|---|
 | `/art` | Open the art browser. |
-| `/art create [scene\|image\|gif\|video\|logo]` | Open the prompt template picker (or select a template directly) and prefill the chat composer. |
+| `/art create [scene\|image\|gif\|video\|logo\|<path>]` | Open the interactive creation TUI (or prefill its mode/source). |
 | `/art on` | Enable art and persist the choice globally. |
 | `/art off` | Disable art and persist the choice globally. |
 | `/art toggle` | Flip the current enabled state and persist it. |
@@ -21,25 +21,30 @@ Subcommand names are case-insensitive.
 | `/art validate [id\|path]` | Validate one pack or every pack. See below. |
 | `/art help` | Show the command list and the three arts paths. |
 
-There is no `/art list`; the dialog is the list. `/art create` prepares an
-adjustable prompt template for the agent in chat (and copies it to the terminal
-clipboard via OSC 52 when supported).
+There is no `/art list`; the dialog is the list. `/art create` opens a native
+single-screen creation TUI.
 
-### Creation templates
+### Creation TUI (`/art create`)
 
-`/art create` accepts an optional template kind (`scene`, `image`, `gif`,
-`video`, or `logo`; common aliases such as `canvas`, `png`, `mp4`, or `banner`
-also work). Without an argument, it opens a picker dialog so you can choose what
-kind of art or media input you want to use:
+`/art create` (or pressing `c` inside `/art`) opens a keyboard-driven form with
+live auto-detection:
 
-- `scene`: procedural looping animation (`scene.mjs`) from a description
-- `image`: PNG, JPEG, or WebP converted into an ASCII canvas with optional effects
-- `gif`: animated GIF converted into an ASCII frame sequence
-- `video`: MP4, MOV, or WebM video converted into an ASCII frame sequence (requires `ffmpeg`)
-- `logo`: custom ASCII logo, banner, or static canvas with optional live effects
+- **Source**: paste a file path (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`,
+  `.mp4`, `.mov`, `.webm`, `.mjs`) or type a text description. Quotes from
+  Windows *"Copy as path"* and `file://` URLs are normalized automatically.
+- **Mode**: `auto` (follows `Source`), `scene`, `logo`, `image`, `gif`, `video`.
+- **Pack ID**: auto-derived from the filename or prompt words until you edit it.
+- **Scope & Pin Git**: choose `user (~/.config/opencode/arts)` or
+  `project (.opencode/arts · Git)` and optionally pin the pack in
+  `<project>/.opencode/art.json`.
+- **Style, Fit, Effect, Grid/FPS**: toggle with `Left`/`Right` or `Space`.
 
-Selecting a template prefills the chat composer with bracketed `[...]` fields
-ready to adjust before pressing `Enter`.
+Pressing `Enter`:
+- For **media and `.mjs` files**: bakes the pack directly in a background CLI
+  process, applies your chosen style/fit/effect and optional `.opencode/art.json`
+  pin, reloads packs, and activates it immediately (0 LLM tokens).
+- For **AI text prompts (`scene` / `logo`)**: closes the dialog and inserts a
+  compact 2-line prompt into the chat composer with no `[...]` placeholders.
 
 A bare `/art` opens the dialog. An unknown subcommand shows
 `Unknown command "..."` and suggests `/art help`. Missing arguments show a

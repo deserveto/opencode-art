@@ -2,13 +2,62 @@
 import type { Plugin } from "@opencode/plugin/tui"
 import { STYLE_NAMES, type StyleName } from "../art/types.ts"
 import type { ArtState } from "../plugin/state.ts"
+import { ArtCreateDialog } from "./create-dialog.tsx"
 import { ArtDialog } from "./dialog.tsx"
 import { parseArtCommand } from "./parse.ts"
-import { artHelp, captureFocusedEditor, openCreateArtPrompt, safeAlert } from "./templates.ts"
+import {
+  CREATE_TEMPLATE_KINDS,
+  artHelp,
+  captureFocusedEditor,
+  openCreateArtPrompt,
+  resolvePromptTemplate,
+  safeAlert,
+  type EditablePromptTarget,
+} from "./templates.ts"
 
 export { artHelp, openCreateArtPrompt }
 
 type Context = Plugin.Context
+
+export function openCreateArtDialog(
+  context: Context,
+  state: ArtState,
+  options?: {
+    readonly template?: string
+    readonly source?: string
+    readonly preferredEditor?: EditablePromptTarget | null
+  },
+): void {
+  const editor = options?.preferredEditor ?? captureFocusedEditor(context)
+  if (options?.template && !options.source && !resolvePromptTemplate(options.template)) {
+    context.ui.toast.show({
+      message: `Usage: /art create [${CREATE_TEMPLATE_KINDS.join("|")}]`,
+      variant: "warning",
+    })
+    return
+  }
+  try {
+    state.refreshTheme()
+    context.ui.dialog.show(() => (
+      <ArtCreateDialog
+        context={context}
+        state={state}
+        theme={context.theme}
+        formatPath={(value) => context.ui.format.path(value)}
+        close={() => context.ui.dialog.clear()}
+        preferredEditor={editor}
+        initialTemplate={options?.template}
+        initialSource={options?.source}
+      />
+    ))
+    context.ui.dialog.set({ size: "large", centered: true })
+  } catch (error) {
+    context.ui.toast.show({
+      message: `Could not open the create dialog: ${error instanceof Error ? error.message : String(error)}`,
+      variant: "error",
+    })
+  }
+}
 
 export function openArtDialog(context: Context, state: ArtState): void {
   const editor = captureFocusedEditor(context)
@@ -22,8 +71,7 @@ export function openArtDialog(context: Context, state: ArtState): void {
         formatPath={(value) => context.ui.format.path(value)}
         close={() => context.ui.dialog.clear()}
         onCreate={() => {
-          context.ui.dialog.clear()
-          void openCreateArtPrompt(context, undefined, editor)
+          openCreateArtDialog(context, state, { preferredEditor: editor })
         }}
       />
     ))
@@ -50,7 +98,7 @@ export async function runArtCommand(context: Context, state: ArtState, input?: s
       openArtDialog(context, state)
       return
     case "create":
-      await openCreateArtPrompt(context, command.template)
+      openCreateArtDialog(context, state, { template: command.template, source: command.source })
       return
     case "help":
       await safeAlert(context, "opencode-art", artHelp(state))
