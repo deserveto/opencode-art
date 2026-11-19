@@ -8,6 +8,7 @@ Subcommand names are case-insensitive.
 | Command | Behavior |
 |---|---|
 | `/art` | Open the art browser. |
+| `/art create [scene\|image\|gif\|video\|logo]` | Open the prompt template picker (or select a template directly) and prefill the chat composer. |
 | `/art on` | Enable art and persist the choice globally. |
 | `/art off` | Disable art and persist the choice globally. |
 | `/art toggle` | Flip the current enabled state and persist it. |
@@ -20,8 +21,25 @@ Subcommand names are case-insensitive.
 | `/art validate [id\|path]` | Validate one pack or every pack. See below. |
 | `/art help` | Show the command list and the three arts paths. |
 
-There is no `/art list`; the dialog is the list. There is no `/art create`;
-creation happens in chat with the agent or by editing files.
+There is no `/art list`; the dialog is the list. `/art create` prepares an
+adjustable prompt template for the agent in chat (and copies it to the terminal
+clipboard via OSC 52 when supported).
+
+### Creation templates
+
+`/art create` accepts an optional template kind (`scene`, `image`, `gif`,
+`video`, or `logo`; common aliases such as `canvas`, `png`, `mp4`, or `banner`
+also work). Without an argument, it opens a picker dialog so you can choose what
+kind of art or media input you want to use:
+
+- `scene`: procedural looping animation (`scene.mjs`) from a description
+- `image`: PNG, JPEG, or WebP converted into an ASCII canvas with optional effects
+- `gif`: animated GIF converted into an ASCII frame sequence
+- `video`: MP4, MOV, or WebM video converted into an ASCII frame sequence (requires `ffmpeg`)
+- `logo`: custom ASCII logo, banner, or static canvas with optional live effects
+
+Selecting a template prefills the chat composer with bracketed `[...]` fields
+ready to adjust before pressing `Enter`.
 
 A bare `/art` opens the dialog. An unknown subcommand shows
 `Unknown command "..."` and suggests `/art help`. Missing arguments show a
@@ -54,9 +72,9 @@ pack loads; a bad pack never partially renders.
 | Styles: mono · theme · palette · original                                    |
 | Enabled: yes   Style: mono   FPS: 10   Dim: 0%   Frames: 1/60                |
 | Problems: rain: art.json: expected 8 rows, found 7                           |
-| Up/Down select · Enter apply · / filter · s style · d dim · p play           |
+| Up/Down select · Enter apply · / filter · c create · s style · d dim · p play|
 | [/] frame · Left/Right fps · e on/off · r reload · Esc/q close               |
-| * active · truecolor · Create art in chat · ~/.config/opencode/arts          |
+| * active · truecolor · /art create · ~/.config/opencode/arts                 |
 +------------------------------------------------------------------------------+
 ```
 
@@ -86,6 +104,7 @@ each. Invalid packs are not selectable.
 | `Down` / `j` | Select the next pack (arrows also work in filter mode). |
 | `Enter` | Apply the selected pack and persist it globally. |
 | `/` | Filter packs by id or name (`Backspace` deletes, `Enter` or `Esc` exits filter mode). |
+| `c` | Close the browser and open the `/art create` prompt template picker. |
 | `s` | Cycle through the styles available for the selected pack. |
 | `d` | Cycle dimming through `0%`, `25%`, `50%`, and `75%` and persist globally. |
 | `p` | Play or pause preview animation. |

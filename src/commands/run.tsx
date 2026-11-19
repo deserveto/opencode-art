@@ -4,10 +4,14 @@ import { STYLE_NAMES, type StyleName } from "../art/types.ts"
 import type { ArtState } from "../plugin/state.ts"
 import { ArtDialog } from "./dialog.tsx"
 import { parseArtCommand } from "./parse.ts"
+import { artHelp, captureFocusedEditor, openCreateArtPrompt, safeAlert } from "./templates.ts"
+
+export { artHelp, openCreateArtPrompt }
 
 type Context = Plugin.Context
 
 export function openArtDialog(context: Context, state: ArtState): void {
+  const editor = captureFocusedEditor(context)
   try {
     state.refreshTheme()
     // show() resets presentation to medium; apply the size after it opens.
@@ -17,6 +21,10 @@ export function openArtDialog(context: Context, state: ArtState): void {
         theme={context.theme}
         formatPath={(value) => context.ui.format.path(value)}
         close={() => context.ui.dialog.clear()}
+        onCreate={() => {
+          context.ui.dialog.clear()
+          void openCreateArtPrompt(context, undefined, editor)
+        }}
       />
     ))
     context.ui.dialog.set({ size: "xlarge", centered: true })
@@ -28,40 +36,8 @@ export function openArtDialog(context: Context, state: ArtState): void {
   }
 }
 
-export function artHelp(state: ArtState): string {
-  return [
-    "/art                 open the art browser",
-    "/art on | off | toggle",
-    "/art next            next pack in scope order",
-    "/art set <id>        select a pack",
-    "/art style <mono|theme|palette|original>",
-    "/art fps <1-30>",
-    "/art dim <0-80>",
-    "/art reload          re-scan packs",
-    "/art validate [id|path]",
-    "/art help",
-    "",
-    `project  ${state.roots.projectArts}`,
-    `user     ${state.roots.globalArts}`,
-    `bundled  ${state.roots.bundledFrames}`,
-    "",
-    "Create art by asking the agent in chat (opencode-art skill).",
-  ].join("\n")
-}
-
 function isStyle(value: string | undefined): value is StyleName {
   return typeof value === "string" && (STYLE_NAMES as readonly string[]).includes(value)
-}
-
-async function safeAlert(context: Context, title: string, message: string): Promise<void> {
-  try {
-    await context.ui.dialog.alert({ title, message })
-  } catch (error) {
-    context.ui.toast.show({
-      message: `${title}: ${message.split("\n")[0] ?? ""} (${error instanceof Error ? error.message : String(error)})`,
-      variant: "error",
-    })
-  }
 }
 
 export async function runArtCommand(context: Context, state: ArtState, input?: string): Promise<void> {
@@ -72,6 +48,9 @@ export async function runArtCommand(context: Context, state: ArtState, input?: s
   switch (command.kind) {
     case "dialog":
       openArtDialog(context, state)
+      return
+    case "create":
+      await openCreateArtPrompt(context, command.template)
       return
     case "help":
       await safeAlert(context, "opencode-art", artHelp(state))

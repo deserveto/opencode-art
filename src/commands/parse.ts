@@ -6,6 +6,7 @@ export type ArtCommand =
   | { readonly kind: "toggle" }
   | { readonly kind: "next" }
   | { readonly kind: "reload" }
+  | { readonly kind: "create"; readonly template?: string }
   | { readonly kind: "validate"; readonly target?: string }
   | { readonly kind: "set"; readonly id?: string }
   | { readonly kind: "style"; readonly style?: string }
@@ -25,6 +26,8 @@ export function parseArtCommand(input?: string): ArtCommand {
     case "reload":
     case "help":
       return { kind: name }
+    case "create":
+      return { kind: "create", template: tokens[1]?.toLowerCase() }
     case "validate":
       return { kind: "validate", target: tokens[1] }
     case "set":

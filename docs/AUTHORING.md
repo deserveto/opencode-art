@@ -267,17 +267,95 @@ Example sidecar line:
 
 The matching `.txt` line is `/@`.
 
-## The agent skill
+## The agent skill and prompt templates
 
 The package's server part registers the `opencode-art` skill from
 [skills/opencode-art/SKILL.md](../skills/opencode-art/SKILL.md). The skill
 teaches the pack format, the scene API, the authoring loop, the arts paths, and
 the common failures.
 
-Ask in chat, for example:
+You can ask in chat in plain language, or run `/art create` (or press `c`
+inside `/art`) to choose a template and prefill the chat composer:
 
-> Make me a rainy city background for the OpenCode home screen, mono, about
-> 100 columns wide.
+| Command | Template purpose |
+|---|---|
+| `/art create` | Open the template picker dialog. |
+| `/art create scene` | Procedural animated scene (`scene.mjs`) from a visual idea. |
+| `/art create image` | Convert a PNG, JPEG, or WebP file into a static or effect-animated canvas. |
+| `/art create gif` | Convert an animated GIF file into a frame pack. |
+| `/art create video` | Convert an MP4, MOV, or WebM video into a frame pack (requires `ffmpeg`). |
+| `/art create logo` | Draw a custom ASCII logo, banner, or static canvas with optional effects. |
+
+Each template lists the accepted fields in `[...]` brackets so you can adjust
+the pack id, file path or description, dimensions, fit mode (`stretch`,
+`contain`, `cover`, `center`), color style (`mono`, `theme`, `palette`,
+`original`), motion effects (`shimmer`, `wave`, `drift`, `twinkle`, `scanline`),
+and scope (`user` or `project`) before pressing `Enter`:
+
+### Procedural animated scene (`/art create scene`)
+
+```text
+Create a new animated ASCII art pack for opencode-art using the opencode-art skill:
+- Pack id: [my-scene]
+- Scene idea: [e.g. cyberpunk rainy street with neon signs, falling rain, and puddle reflections]
+- Motion & loop: [smooth 6-second seamless loop at 12 fps]
+- Size & fit: [180x50], fit [stretch | contain | cover | center]
+- Color style: [mono | theme | palette | original] (optional palette hex stops: [#1e1e2e, #89b4fa, #f5c2e7])
+- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
+Please init the pack, write a deterministic scene.mjs, bake, validate, preview, and tell me the /art set command.
+```
+
+### Image to ASCII canvas (`/art create image`)
+
+```text
+Convert an image into an opencode-art ASCII canvas pack using the opencode-art skill:
+- Input image path: [/path/to/image.png] (supports PNG, JPEG, WebP)
+- Pack id: [my-image]
+- Size & fit: [180x50], fit [stretch | contain | cover | center]
+- Color style: [original | palette | theme | mono] (optional: --dither for mono, --invert)
+- Motion effects (optional, up to 4): [none | shimmer | wave | drift | twinkle | scanline] at [10] fps
+- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
+Please bake the image, add any requested effects to art.json, validate, preview, and tell me the /art set command.
+```
+
+### GIF to animated ASCII (`/art create gif`)
+
+```text
+Convert an animated GIF into an opencode-art frame pack using the opencode-art skill:
+- Input GIF path: [/path/to/animation.gif]
+- Pack id: [my-gif]
+- Size & fit: [180x50], fit [stretch | contain | cover | center]
+- Playback: [10] fps, loop duration [6] seconds
+- Color style: [original | palette | theme | mono] (colors: [64], optional: --dither for mono, --invert)
+- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
+Please bake the GIF into frames, validate, preview, and tell me the /art set command.
+```
+
+### Video to animated ASCII (`/art create video`)
+
+```text
+Convert a video file into an opencode-art animated frame pack using the opencode-art skill:
+- Input video path: [/path/to/video.mp4] (requires ffmpeg on PATH)
+- Pack id: [my-video]
+- Size & fit: [180x50], fit [stretch | contain | cover | center]
+- Playback: [12] fps, loop duration [6] seconds
+- Color style: [original | palette | theme | mono] (colors: [64], optional: --dither for mono, --invert)
+- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
+Please bake the video into frames, validate, preview, and tell me the /art set command.
+```
+
+### Logo / banner + motion effects (`/art create logo`)
+
+```text
+Create a custom ASCII logo or static canvas pack for opencode-art using the opencode-art skill:
+- Pack id: [my-logo]
+- Text or artwork to draw: [e.g. bold "OPENCODE" emblem centered over a subtle grid]
+- Size & fit: [80x24], fit [center | contain | stretch | cover]
+- Color style: [palette | theme | mono] (optional palette hex stops: [#313244, #89b4fa, #f5c2e7])
+- Motion effects (optional, up to 4): [shimmer | wave | drift | twinkle | scanline] at [10] fps
+- Save to: [user (~/.config/opencode/arts) | project (.opencode/arts)]
+Please create art.json and canvas.txt, validate, preview, and tell me the /art set command.
+```
 
 The agent can create the pack directly. With the CLI, it can also
 `init`, write `scene.mjs`, `bake`, `validate`, and `preview` in a loop until the

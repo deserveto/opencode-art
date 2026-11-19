@@ -15,6 +15,7 @@ interface DialogProps {
   readonly theme: ResolvedTheme
   readonly formatPath: (value: string) => string
   readonly close: () => void
+  readonly onCreate?: () => void
 }
 
 const MAX_VISIBLE_PACKS = 12
@@ -422,6 +423,14 @@ export function ArtDialog(props: DialogProps) {
         note = "Packs reloaded"
         scheduleRender()
       })
+      return
+    }
+    if (key.name === "c") {
+      if (!props.onCreate) return
+      consume(key)
+      stopTimer()
+      props.onCreate()
+      return
     }
   }
 
@@ -659,10 +668,10 @@ export function ArtDialog(props: DialogProps) {
           </box>
         ) : null}
         <text fg={faint} wrapMode="word">
-          Up/Down select · Enter apply · / filter · s style · d dim · p play · [/] frame · Left/Right fps · e on/off · r reload · Esc/q close
+          Up/Down select · Enter apply · / filter · c create · s style · d dim · p play · [/] frame · Left/Right fps · e on/off · r reload · Esc/q close
         </text>
         <text fg={faint} wrapMode="word">
-          * active · {capabilityText} · Create art in chat · {props.formatPath(props.state.roots.globalArts)}
+          * active · {capabilityText} · /art create · {props.formatPath(props.state.roots.globalArts)}
         </text>
       </box>
     )
